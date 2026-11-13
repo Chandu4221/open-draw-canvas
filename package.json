@@ -1,8 +1,16 @@
 {
   "name": "open-draw-canvas-root",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "A framework-free, batteries-included visual canvas and drawing SDK monorepo",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Chandu4221/open-draw-canvas.git"
+  },
+  "homepage": "https://github.com/Chandu4221/open-draw-canvas#readme",
+  "bugs": {
+    "url": "https://github.com/Chandu4221/open-draw-canvas/issues"
+  },
   "main": "index.js",
   "scripts": {
     "build": "turbo run build",
