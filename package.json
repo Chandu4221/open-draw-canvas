@@ -1,0 +1,54 @@
+{
+  "name": "open-draw-canvas-root",
+  "version": "0.9.0",
+  "description": "A framework-free, batteries-included visual canvas and drawing SDK monorepo",
+  "license": "MIT",
+  "main": "index.js",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint:deps": "depcruise --config .dependency-cruiser.cjs packages",
+    "lint:naming": "node scripts/lint-naming.mjs",
+    "check": "pnpm format:check && pnpm lint && pnpm lint:deps && pnpm lint:naming && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "keywords": [
+    "canvas",
+    "drawing",
+    "vector",
+    "svg",
+    "shapes",
+    "diagrams",
+    "whiteboard",
+    "typescript"
+  ],
+  "author": "",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.15.0",
+      "onFail": "download"
+    }
+  },
+  "packageManager": "pnpm@12.15.0",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "dependency-cruiser": "18.7.0",
+    "eslint": "^10.13.0",
+    "prettier": "^3.9.10",
+    "tsup": "^9.0.0",
+    "turbo": "^2.11.10",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^5.0.5"
+  }
+}
