@@ -1,7 +1,7 @@
 /// @open-draw/canvas — public SDK contract surface (R-004, R-010, R-036, ADR-0008).
 /// Pure interaction core and batteries-included visual canvas controller.
 
-export const CANVAS_VERSION = "0.9.0" as const;
+export const CANVAS_VERSION = "0.9.1" as const;
 
 export {
   type Camera,
