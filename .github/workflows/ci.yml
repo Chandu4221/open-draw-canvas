@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  branch-name:
+    name: "Branch name (R-032)"
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Enforce conventional branch naming
+        run: |
+          echo "$GITHUB_HEAD_REF" | grep -Eq '^(feat|fix|docs|refactor|test|build|chore|perf)/[a-z0-9]+(-[a-z0-9]+)*$' || {
+            echo "::error::Branch '$GITHUB_HEAD_REF' must match <type>/<kebab-case-summary> (R-032)"
+            exit 1
+          }
+
+  pr-title:
+    name: "PR title (R-033)"
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Enforce conventional commit title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          echo "$PR_TITLE" | grep -Eq '^(feat|fix|docs|refactor|test|build|chore|perf)(\([a-z0-9-]+\))?: .+$' || {
+            echo "::error::PR title '$PR_TITLE' must follow conventional commit format <type>(<scope>): <summary> (R-033)"
+            exit 1
+          }
+
+  check:
+    name: "format → lint → typecheck → test → build"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check (R-035 tier 1/2)
+        run: pnpm check
