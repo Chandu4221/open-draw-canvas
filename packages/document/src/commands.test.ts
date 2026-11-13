@@ -1,12 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  DESIGN_STYLES,
-  DEVICE_TYPES,
-  parseShapeId,
-  PLATFORMS,
-  STYLE_PROFILES,
-  type ThemePalette,
-} from "@open-draw/contracts";
+import { DEVICE_TYPES, parseShapeId, STYLE_PROFILES } from "@open-draw/contracts";
 import {
   applyTransaction,
   COMMANDS,
@@ -27,86 +20,6 @@ describe("document commands (milestone 05)", () => {
       createRect(rectId, { x: 10, y: 10, width: 100, height: 50 }, { parent: pageId }),
     ]);
   }
-
-  it("applies SetShapeSemantic and inverts cleanly", () => {
-    const doc = createBaseDoc();
-    const result = applyTransaction(
-      doc,
-      createTransaction([
-        {
-          type: COMMANDS.setShapeSemantic,
-          id: rectId,
-          semantic: {
-            id: "button",
-            platform: PLATFORMS.web,
-            properties: { variant: "primary" },
-          },
-        },
-      ]),
-    );
-
-    expect(result.document.shapes[rectId]?.meta.semantic?.id).toBe("button");
-    expect(result.document.shapes[rectId]?.meta.semantic?.properties?.variant).toBe("primary");
-
-    // Undo restores previous (null)
-    const undone = applyTransaction(result.document, createTransaction(result.inverse));
-    expect(undone.document.shapes[rectId]?.meta.semantic).toBeUndefined();
-  });
-
-  it("applies SetRootPlatform on root pages and inverts cleanly", () => {
-    const doc = createBaseDoc();
-    const result = applyTransaction(
-      doc,
-      createTransaction([
-        {
-          type: COMMANDS.setRootPlatform,
-          id: pageId,
-          platform: "androidNative",
-        },
-      ]),
-    );
-
-    expect(result.document.shapes[pageId]?.meta.platform).toBe("androidNative");
-
-    const undone = applyTransaction(result.document, createTransaction(result.inverse));
-    expect(undone.document.shapes[pageId]?.meta.platform).toBeUndefined();
-  });
-
-  it("applies SetRootPlatform on root rects and inverts cleanly", () => {
-    const rootRectId = parseShapeId("root-rect-1");
-    const doc = createDocument([createRect(rootRectId, { x: 0, y: 0, width: 640, height: 480 })]);
-    const result = applyTransaction(
-      doc,
-      createTransaction([
-        {
-          type: COMMANDS.setRootPlatform,
-          id: rootRectId,
-          platform: "androidNative",
-        },
-      ]),
-    );
-
-    expect(result.document.shapes[rootRectId]?.meta.platform).toBe("androidNative");
-
-    const undone = applyTransaction(result.document, createTransaction(result.inverse));
-    expect(undone.document.shapes[rootRectId]?.meta.platform).toBeUndefined();
-  });
-
-  it("rejects SetRootPlatform on non-root shapes (R-026)", () => {
-    const doc = createBaseDoc();
-    expect(() =>
-      applyTransaction(
-        doc,
-        createTransaction([
-          {
-            type: COMMANDS.setRootPlatform,
-            id: rectId,
-            platform: PLATFORMS.web,
-          },
-        ]),
-      ),
-    ).toThrow(DocumentError);
-  });
 
   it("applies SetRootStyle on root pages and inverts cleanly", () => {
     const doc = createBaseDoc();
@@ -137,41 +50,6 @@ describe("document commands (milestone 05)", () => {
             type: COMMANDS.setRootStyle,
             id: rectId,
             style: STYLE_PROFILES.minimal,
-          },
-        ]),
-      ),
-    ).toThrow(DocumentError);
-  });
-
-  it("applies SetRootDesignStyle on root pages and inverts cleanly", () => {
-    const doc = createBaseDoc();
-    const result = applyTransaction(
-      doc,
-      createTransaction([
-        {
-          type: COMMANDS.setRootDesignStyle,
-          id: pageId,
-          designStyle: DESIGN_STYLES.neoBrutalism,
-        },
-      ]),
-    );
-
-    expect(result.document.shapes[pageId]?.meta.designStyle).toBe(DESIGN_STYLES.neoBrutalism);
-
-    const undone = applyTransaction(result.document, createTransaction(result.inverse));
-    expect(undone.document.shapes[pageId]?.meta.designStyle).toBeUndefined();
-  });
-
-  it("rejects SetRootDesignStyle on non-root shapes (R-026)", () => {
-    const doc = createBaseDoc();
-    expect(() =>
-      applyTransaction(
-        doc,
-        createTransaction([
-          {
-            type: COMMANDS.setRootDesignStyle,
-            id: rectId,
-            designStyle: DESIGN_STYLES.neoBrutalism,
           },
         ]),
       ),
@@ -287,122 +165,6 @@ describe("document commands (milestone 05)", () => {
     // Inverse of clear restores "Hello World"
     const restored = applyTransaction(cleared.document, createTransaction(cleared.inverse));
     expect(restored.document.shapes[rectId]?.content).toBe("Hello World");
-  });
-
-  it("applies SetRootTheme on root shapes and inverts cleanly (R-026)", () => {
-    const doc = createBaseDoc();
-    const result = applyTransaction(
-      doc,
-      createTransaction([
-        {
-          type: COMMANDS.setRootTheme,
-          id: pageId,
-          theme: { primary: "#1d4ed8", surface: "#ffffff" },
-        },
-      ]),
-    );
-
-    expect(result.document.shapes[pageId]?.meta.theme?.primary).toBe("#1d4ed8");
-    expect(result.document.shapes[pageId]?.meta.theme?.surface).toBe("#ffffff");
-
-    const undone = applyTransaction(result.document, createTransaction(result.inverse));
-    expect(undone.document.shapes[pageId]?.meta.theme).toBeUndefined();
-  });
-
-  it("rejects SetRootTheme on non-root shapes (R-026)", () => {
-    const doc = createBaseDoc();
-    expect(() =>
-      applyTransaction(
-        doc,
-        createTransaction([
-          {
-            type: COMMANDS.setRootTheme,
-            id: rectId,
-            theme: { primary: "#1d4ed8" },
-          },
-        ]),
-      ),
-    ).toThrow(DocumentError);
-  });
-
-  it("rejects SetRootTheme with invalid hex color values (B14)", () => {
-    const doc = createBaseDoc();
-    expect(() =>
-      applyTransaction(
-        doc,
-        createTransaction([
-          {
-            type: COMMANDS.setRootTheme,
-            id: pageId,
-            theme: { primary: "not-a-color" },
-          },
-        ]),
-      ),
-    ).toThrow(DocumentError);
-
-    expect(() =>
-      applyTransaction(
-        doc,
-        createTransaction([
-          {
-            type: COMMANDS.setRootTheme,
-            id: pageId,
-            theme: { primary: "#12345" },
-          },
-        ]),
-      ),
-    ).toThrow(DocumentError);
-  });
-
-  it("rejects SetRootTheme with unknown theme slots outside THEME_PALETTE_SLOTS (B15)", () => {
-    const doc = createBaseDoc();
-    expect(() =>
-      applyTransaction(
-        doc,
-        createTransaction([
-          {
-            type: COMMANDS.setRootTheme,
-            id: pageId,
-            theme: { invalidSlot: "#1d4ed8" } as unknown as ThemePalette,
-          },
-        ]),
-      ),
-    ).toThrow(DocumentError);
-  });
-
-  it("applies SetRootDarkMode on root shapes and inverts cleanly (R-026)", () => {
-    const doc = createBaseDoc();
-    const result = applyTransaction(
-      doc,
-      createTransaction([
-        {
-          type: COMMANDS.setRootDarkMode,
-          id: pageId,
-          darkMode: true,
-        },
-      ]),
-    );
-
-    expect(result.document.shapes[pageId]?.meta.darkMode).toBe(true);
-
-    const undone = applyTransaction(result.document, createTransaction(result.inverse));
-    expect(undone.document.shapes[pageId]?.meta.darkMode).toBeUndefined();
-  });
-
-  it("rejects SetRootDarkMode on non-root shapes (R-026)", () => {
-    const doc = createBaseDoc();
-    expect(() =>
-      applyTransaction(
-        doc,
-        createTransaction([
-          {
-            type: COMMANDS.setRootDarkMode,
-            id: rectId,
-            darkMode: true,
-          },
-        ]),
-      ),
-    ).toThrow(DocumentError);
   });
 
   it("rejects SetShapeBoundingBox with non-positive or NaN dimensions", () => {

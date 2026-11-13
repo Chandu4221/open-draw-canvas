@@ -294,8 +294,10 @@ export function attachKeyboardListeners(ctx: KeyboardBindingContext): () => void
                               ...((raw as Record<string, unknown>).meta as Record<string, unknown>),
                             }
                           : {};
-                      if (rawMeta.semantic === null) {
-                        delete rawMeta.semantic;
+                      for (const [k, v] of Object.entries(rawMeta)) {
+                        if (v === null) {
+                          delete rawMeta[k];
+                        }
                       }
                       if (
                         typeof rawMeta.order !== "object" ||

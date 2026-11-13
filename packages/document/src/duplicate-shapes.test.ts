@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseShapeId, PLATFORMS, STYLE_PROFILES } from "@open-draw/contracts";
+import { parseShapeId, STYLE_PROFILES } from "@open-draw/contracts";
 import {
   applyTransaction,
   COMMANDS,
@@ -27,7 +27,6 @@ describe("DuplicateShapes command (F5, ADR-0006 Option A)", () => {
           meta: {
             order: {},
             style: STYLE_PROFILES.crayon,
-            platform: PLATFORMS.web,
           },
         },
       ),
@@ -81,7 +80,7 @@ describe("DuplicateShapes command (F5, ADR-0006 Option A)", () => {
     expect(() => parseDocument(serializeDocument(result.document))).not.toThrow();
   });
 
-  it("duplicates a root page with nested children, preserving subtree structure and root platform/style (R-026)", () => {
+  it("duplicates a root page with nested children, preserving subtree structure and root style (R-026)", () => {
     const doc = createTestDoc();
     const result = applyTransaction(
       doc,
@@ -104,7 +103,6 @@ describe("DuplicateShapes command (F5, ADR-0006 Option A)", () => {
     const newPage = newPages[0]!;
     expect(newPage.boundingBox).toEqual({ x: 50, y: 50, width: 800, height: 600 });
     expect(newPage.meta.style).toBe(STYLE_PROFILES.crayon);
-    expect(newPage.meta.platform).toBe(PLATFORMS.web);
 
     const newSections = shapes.filter((s) => s.kind === "section" && s.id !== sectionId);
     expect(newSections.length).toBe(1);

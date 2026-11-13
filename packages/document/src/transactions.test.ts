@@ -7,14 +7,7 @@ import { applyTransaction, createTransaction } from "./transactions";
 import { createDocument } from "./document";
 import type { Document } from "./document";
 import type { Shape } from "./shape";
-import {
-  DEVICE_TYPES,
-  DESIGN_STYLES,
-  parseShapeId,
-  PLATFORMS,
-  ROOT_ROLES,
-  STYLE_PROFILES,
-} from "@open-draw/contracts";
+import { DEVICE_TYPES, parseShapeId, STYLE_PROFILES } from "@open-draw/contracts";
 
 const empty = createDocument();
 
@@ -257,19 +250,14 @@ describe("applyTransaction", () => {
     expect(result.document.shapes[rectId]).toBe(doc.shapes[rectId]);
   });
 
-  it("short-circuits no-op mutations for semantic, order, hiddenOn, root meta, and reparent (R-018)", () => {
+  it("short-circuits no-op mutations for order, hiddenOn, root style, and reparent (R-018)", () => {
     const pageId = parseShapeId("page-meta");
     const rectId = parseShapeId("rect-meta");
     const pageShape = {
       ...createPage(pageId, { x: 0, y: 0, width: 600, height: 600 }),
       meta: {
         order: {},
-        platform: PLATFORMS.web,
         style: STYLE_PROFILES.minimal,
-        designStyle: DESIGN_STYLES.neoBrutalism,
-        role: ROOT_ROLES.component,
-        theme: { primary: "#0055ff", surface: "#ffffff" },
-        darkMode: true,
       },
     };
     const rectShape = {
@@ -277,29 +265,14 @@ describe("applyTransaction", () => {
       meta: {
         order: { [DEVICE_TYPES.mobile]: 2 },
         hiddenOn: [DEVICE_TYPES.mobile],
-        semantic: { id: "btn", platform: PLATFORMS.web, properties: { variant: "filled" } },
       },
     };
     const doc = createDocument([pageShape, rectShape]);
 
     const tx = createTransaction([
-      {
-        type: COMMANDS.setShapeSemantic,
-        id: rectId,
-        semantic: { id: "btn", platform: PLATFORMS.web, properties: { variant: "filled" } },
-      },
       { type: COMMANDS.setShapeOrder, id: rectId, deviceType: DEVICE_TYPES.mobile, order: 2 },
       { type: COMMANDS.setShapeHiddenOn, id: rectId, hiddenOn: [DEVICE_TYPES.mobile] },
-      { type: COMMANDS.setRootPlatform, id: pageId, platform: PLATFORMS.web },
       { type: COMMANDS.setRootStyle, id: pageId, style: STYLE_PROFILES.minimal },
-      { type: COMMANDS.setRootDesignStyle, id: pageId, designStyle: DESIGN_STYLES.neoBrutalism },
-      { type: COMMANDS.setRootRole, id: pageId, role: ROOT_ROLES.component },
-      {
-        type: COMMANDS.setRootTheme,
-        id: pageId,
-        theme: { primary: "#0055ff", surface: "#ffffff" },
-      },
-      { type: COMMANDS.setRootDarkMode, id: pageId, darkMode: true },
       {
         type: COMMANDS.reparentShape,
         id: rectId,

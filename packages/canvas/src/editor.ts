@@ -62,7 +62,6 @@ function isPropertyMutationCommand(cmd: Command): boolean {
     cmd.type === COMMANDS.setShapeStyle ||
     cmd.type === COMMANDS.setShapeLabel ||
     cmd.type === COMMANDS.setShapeContent ||
-    cmd.type === COMMANDS.setShapeSemantic ||
     cmd.type === COMMANDS.setShapeHiddenOn
   );
 }

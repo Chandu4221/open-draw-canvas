@@ -850,7 +850,7 @@ describe("createEditor", () => {
   });
 
   it("parents newly drawn shapes to enclosing container and supports N levels of nested parenting", () => {
-    // Level 1: root container (0, 0, 800, 600) with platform metadata (R-024, R-026)
+    // Level 1: root container (0, 0, 800, 600) with container metadata (R-024, R-026)
     const rootContainer = createRect(
       parseShapeId("c-root"),
       {
@@ -859,13 +859,13 @@ describe("createEditor", () => {
         width: 800,
         height: 600,
       },
-      { meta: { order: {}, platform: "web" } },
+      { meta: { order: {}, isContainer: true } },
     );
     // Level 2: nested container (100, 100, 400, 400) inside rootContainer => world (100, 100, 400, 400)
     const nestedContainer = createRect(
       parseShapeId("c-nested"),
       { x: 100, y: 100, width: 400, height: 400 },
-      { parent: rootContainer.id },
+      { parent: rootContainer.id, meta: { order: {}, isContainer: true } },
     );
     editor = createEditor(container as unknown as HTMLElement, {
       document: createDocument([rootContainer, nestedContainer]),
@@ -913,7 +913,7 @@ describe("createEditor", () => {
   });
 
   it("reparents dragged shape into nested container at level N when dragged over it", () => {
-    // Level 1: root container (0, 0, 800, 600) with platform metadata (R-024, R-026)
+    // Level 1: root container (0, 0, 800, 600) with container metadata (R-024, R-026)
     const rootContainer = createRect(
       parseShapeId("drag-root"),
       {
@@ -922,13 +922,13 @@ describe("createEditor", () => {
         width: 800,
         height: 600,
       },
-      { meta: { order: {}, platform: "web" } },
+      { meta: { order: {}, isContainer: true } },
     );
     // Level 2: nested container (100, 100, 400, 400) inside drag-root => world (100, 100, 400, 400)
     const nestedContainer = createRect(
       parseShapeId("drag-nested"),
       { x: 100, y: 100, width: 400, height: 400 },
-      { parent: rootContainer.id },
+      { parent: rootContainer.id, meta: { order: {}, isContainer: true } },
     );
     // Free shape outside on ROOT_ID at world (900, 100, 60, 40)
     const freeShape = createRect(parseShapeId("drag-free"), {

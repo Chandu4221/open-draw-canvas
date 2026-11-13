@@ -1,7 +1,7 @@
 // Mutates a shape record in-place for a single command and returns inverse commands.
 // Used by applyTransaction to batch N commands in O(N) without intermediate Document copying (R-018, ADR-0002 D8).
-import type { DeviceType, ShapeId, ThemePalette } from "@open-draw/contracts";
-import { isRootId, isRootRole, SHAPE_KINDS } from "@open-draw/contracts";
+import type { DeviceType, ShapeId } from "@open-draw/contracts";
+import { isRootId, SHAPE_KINDS } from "@open-draw/contracts";
 import { COMMANDS } from "./commands/registry";
 import type { Command } from "./commands";
 import type { CreateShape } from "./commands/create-shape";
@@ -11,45 +11,10 @@ import type { Document } from "./document";
 import { SCHEMA_VERSION } from "./document";
 import { DocumentError } from "./errors";
 import { pruneSelectedDescendants } from "./reparent";
-import { isCustomShape, type SemanticTag, type Shape } from "./shape";
+import { isCustomShape, type Shape } from "./shape";
 import { subtreeOf } from "./tree";
-import { parseThemePalette } from "./meta-validation";
 import { parseShape } from "./validation";
 import { parseColor, parseStrokeWidth } from "./style-validation";
-
-function areSemanticsEqual(a: SemanticTag | undefined | null, b: SemanticTag | null): boolean {
-  const semA = a ?? null;
-  const semB = b;
-  if (semA === semB) return true;
-  if (semA === null || semB === null) return false;
-  if (semA.id !== semB.id || semA.platform !== semB.platform) return false;
-  const propsA = semA.properties;
-  const propsB = semB.properties;
-  if (propsA === propsB) return true;
-  const keysA = propsA !== undefined ? Object.keys(propsA) : [];
-  const keysB = propsB !== undefined ? Object.keys(propsB) : [];
-  if (keysA.length !== keysB.length) return false;
-  for (let i = 0; i < keysA.length; i += 1) {
-    const k = keysA[i]!;
-    if (propsA![k] !== propsB![k]) return false;
-  }
-  return true;
-}
-
-function areThemesEqual(a: ThemePalette | undefined | null, b: ThemePalette | null): boolean {
-  const themeA = a ?? null;
-  const themeB = b;
-  if (themeA === themeB) return true;
-  if (themeA === null || themeB === null) return false;
-  const keysA = Object.keys(themeA) as (keyof ThemePalette)[];
-  const keysB = Object.keys(themeB) as (keyof ThemePalette)[];
-  if (keysA.length !== keysB.length) return false;
-  for (let i = 0; i < keysA.length; i += 1) {
-    const k = keysA[i]!;
-    if (themeA[k] !== themeB[k]) return false;
-  }
-  return true;
-}
 
 function areHiddenOnEqual(
   a: readonly DeviceType[] | undefined | null,
@@ -236,47 +201,6 @@ export function applyCommandToMap(
       return [{ type: COMMANDS.setShapeBoundingBox, id: command.id, boundingBox: previousBox }];
     }
 
-    case COMMANDS.setShapeSemantic: {
-      const shape = shapes[command.id];
-      if (shape === undefined) {
-        throw new DocumentError("shapeNotFound", `no shape with id: ${command.id}`);
-      }
-      const previousSemantic = shape.meta.semantic ?? null;
-      if (areSemanticsEqual(previousSemantic, command.semantic)) {
-        return [];
-      }
-      const nextMeta = { ...shape.meta };
-      if (command.semantic === null) {
-        delete nextMeta.semantic;
-      } else {
-        nextMeta.semantic = command.semantic;
-      }
-      shapes[command.id] = { ...shape, meta: nextMeta };
-      return [{ type: COMMANDS.setShapeSemantic, id: command.id, semantic: previousSemantic }];
-    }
-
-    case COMMANDS.setRootPlatform: {
-      const shape = shapes[command.id];
-      if (shape === undefined) {
-        throw new DocumentError("shapeNotFound", `no shape with id: ${command.id}`);
-      }
-      if (!isRootId(shape.parentId)) {
-        throw new DocumentError("invalidShape", "platform may only be set on root shapes (R-026)");
-      }
-      const previousPlatform = shape.meta.platform ?? null;
-      if (previousPlatform === command.platform) {
-        return [];
-      }
-      const nextMeta = { ...shape.meta };
-      if (command.platform === null) {
-        delete nextMeta.platform;
-      } else {
-        nextMeta.platform = command.platform;
-      }
-      shapes[command.id] = { ...shape, meta: nextMeta };
-      return [{ type: COMMANDS.setRootPlatform, id: command.id, platform: previousPlatform }];
-    }
-
     case COMMANDS.setRootStyle: {
       const shape = shapes[command.id];
       if (shape === undefined) {
@@ -300,104 +224,6 @@ export function applyCommandToMap(
       }
       shapes[command.id] = { ...shape, meta: nextMeta };
       return [{ type: COMMANDS.setRootStyle, id: command.id, style: previousStyle }];
-    }
-
-    case COMMANDS.setRootDesignStyle: {
-      const shape = shapes[command.id];
-      if (shape === undefined) {
-        throw new DocumentError("shapeNotFound", `no shape with id: ${command.id}`);
-      }
-      if (!isRootId(shape.parentId)) {
-        throw new DocumentError(
-          "invalidShape",
-          "design style may only be set on root shapes (R-026)",
-        );
-      }
-      const previousDesignStyle = shape.meta.designStyle ?? null;
-      if (previousDesignStyle === command.designStyle) {
-        return [];
-      }
-      const nextMeta = { ...shape.meta };
-      if (command.designStyle === null) {
-        delete nextMeta.designStyle;
-      } else {
-        nextMeta.designStyle = command.designStyle;
-      }
-      shapes[command.id] = { ...shape, meta: nextMeta };
-      return [
-        { type: COMMANDS.setRootDesignStyle, id: command.id, designStyle: previousDesignStyle },
-      ];
-    }
-
-    case COMMANDS.setRootRole: {
-      const shape = shapes[command.id];
-      if (shape === undefined) {
-        throw new DocumentError("shapeNotFound", `no shape with id: ${command.id}`);
-      }
-      if (!isRootId(shape.parentId)) {
-        throw new DocumentError("invalidShape", "role may only be set on root shapes (R-026)");
-      }
-      if (command.role !== null && !isRootRole(command.role)) {
-        throw new DocumentError("invalidCommand", `unknown role: ${String(command.role)}`);
-      }
-      const previousRole = shape.meta.role ?? null;
-      if (previousRole === command.role) {
-        return [];
-      }
-      const nextMeta = { ...shape.meta };
-      if (command.role === null) {
-        delete nextMeta.role;
-      } else {
-        nextMeta.role = command.role;
-      }
-      shapes[command.id] = { ...shape, meta: nextMeta };
-      return [{ type: COMMANDS.setRootRole, id: command.id, role: previousRole }];
-    }
-
-    case COMMANDS.setRootTheme: {
-      const shape = shapes[command.id];
-      if (shape === undefined) {
-        throw new DocumentError("shapeNotFound", `no shape with id: ${command.id}`);
-      }
-      if (!isRootId(shape.parentId)) {
-        throw new DocumentError("invalidShape", "theme may only be set on root shapes (R-026)");
-      }
-      const previousTheme = shape.meta.theme ?? null;
-      const targetTheme = command.theme === null ? null : parseThemePalette(command.theme);
-      if (areThemesEqual(previousTheme, targetTheme)) {
-        return [];
-      }
-      const nextMeta = { ...shape.meta };
-      if (targetTheme === null) {
-        delete nextMeta.theme;
-      } else {
-        nextMeta.theme = targetTheme;
-      }
-      shapes[command.id] = { ...shape, meta: nextMeta };
-      return [{ type: COMMANDS.setRootTheme, id: command.id, theme: previousTheme }];
-    }
-
-    case COMMANDS.setRootDarkMode: {
-      const shape = shapes[command.id];
-      if (shape === undefined) {
-        throw new DocumentError("shapeNotFound", `no shape with id: ${command.id}`);
-      }
-      if (!isRootId(shape.parentId)) {
-        throw new DocumentError("invalidShape", "darkMode may only be set on root shapes (R-026)");
-      }
-      const previousDarkMode = shape.meta.darkMode ?? null;
-      const targetDarkMode = command.darkMode === null || command.darkMode === false ? null : true;
-      if (previousDarkMode === targetDarkMode) {
-        return [];
-      }
-      const nextMeta = { ...shape.meta };
-      if (targetDarkMode === null) {
-        delete nextMeta.darkMode;
-      } else {
-        nextMeta.darkMode = true;
-      }
-      shapes[command.id] = { ...shape, meta: nextMeta };
-      return [{ type: COMMANDS.setRootDarkMode, id: command.id, darkMode: previousDarkMode }];
     }
 
     case COMMANDS.setShapeHiddenOn: {

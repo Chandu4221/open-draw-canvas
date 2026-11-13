@@ -5,15 +5,11 @@ import type {
   BoundingBox,
   CustomShapeKind,
   DeviceType,
-  PlatformId,
   PluginId,
   Point,
   ShapeId,
   ShapeKind,
   StyleId,
-  DesignStyleId,
-  RootRole,
-  ThemePalette,
 } from "@open-draw/contracts";
 import { ROOT_ID, SHAPE_KINDS, SHAPE_KIND_VALUES, isRootId } from "@open-draw/contracts";
 import { DocumentError } from "./errors";
@@ -28,29 +24,15 @@ export const SECTION_DIRECTIONS = {
 
 export type SectionDirection = keyof typeof SECTION_DIRECTIONS;
 
-export interface SemanticTag {
-  readonly id: string;
-  readonly platform: PlatformId;
-  readonly properties?: Readonly<Record<string, string | number | boolean>>;
-}
-
-// meta absent semantic = NONE (R-024); absent hiddenOn = visible everywhere
-// (R-028); absent order entry = 0 (one mechanism, two uses — ADR-0002 D6).
+// meta absent hiddenOn = visible everywhere (R-028); absent order entry = 0.
 // `pluginData`: opaque forward-compatibility namespace (R-044, ADR-0003 D4).
-// `platform` and `style`: settable on root pages only, inherited by tree position (R-026, ADR-0004 D7).
-// `designStyle`: aesthetic style specification for AI/developer handoff (R-026).
-// `theme` and `darkMode`: brand colors and theme switcher directives for AI handoff (Idea 4, 6, R-026).
+// `style`: settable on root pages only, inherited by tree position (R-026).
 export interface ShapeMeta {
-  readonly semantic?: SemanticTag;
   readonly order: Partial<Record<DeviceType, number>>;
   readonly hiddenOn?: readonly DeviceType[];
   readonly pluginData?: Readonly<Record<PluginId, unknown>>;
-  readonly platform?: PlatformId;
   readonly style?: StyleId;
-  readonly designStyle?: DesignStyleId;
-  readonly role?: RootRole;
-  readonly theme?: ThemePalette;
-  readonly darkMode?: boolean;
+  readonly [key: string]: unknown;
 }
 
 export interface BaseShape {

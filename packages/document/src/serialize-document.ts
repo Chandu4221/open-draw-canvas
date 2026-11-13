@@ -1,7 +1,7 @@
 // Pure document serializer (R-008, R-014, R-041, R-044). Emits version-only
 // schema without timestamps. Sibling z-order is preserved by maintaining map
 // iteration order. ROOT_ID is strictly excluded.
-import { PLATFORMS, ROOT_ROLES, SHAPE_KINDS, STYLE_PROFILES, isRootId } from "@open-draw/contracts";
+import { SHAPE_KINDS, STYLE_PROFILES, isRootId } from "@open-draw/contracts";
 import type { Document } from "./document";
 import { DocumentError } from "./errors";
 import { isCustomShape } from "./shape";
@@ -153,39 +153,8 @@ export function serializeDocument(doc: Document): string {
     if (shape.meta.hiddenOn !== undefined && shape.meta.hiddenOn.length > 0) {
       meta.hiddenOn = shape.meta.hiddenOn;
     }
-    if (shape.meta.semantic !== undefined) {
-      const semantic: Record<string, unknown> = {
-        id: shape.meta.semantic.id,
-        platform: PLATFORMS[shape.meta.semantic.platform] ?? shape.meta.semantic.platform,
-      };
-      if (shape.meta.semantic.properties !== undefined) {
-        if (!isJsonSerializable(shape.meta.semantic.properties)) {
-          throw new DocumentError(
-            "invalidDocument",
-            `meta.semantic.properties on shape ${shape.id} is not JSON-serializable`,
-          );
-        }
-        semantic.properties = shape.meta.semantic.properties;
-      }
-      meta.semantic = semantic;
-    }
-    if (shape.meta.platform !== undefined) {
-      meta.platform = PLATFORMS[shape.meta.platform] ?? shape.meta.platform;
-    }
     if (shape.meta.style !== undefined) {
       meta.style = STYLE_PROFILES[shape.meta.style] ?? shape.meta.style;
-    }
-    if (shape.meta.designStyle !== undefined) {
-      meta.designStyle = shape.meta.designStyle;
-    }
-    if (shape.meta.role !== undefined) {
-      meta.role = ROOT_ROLES[shape.meta.role] ?? shape.meta.role;
-    }
-    if (shape.meta.theme !== undefined) {
-      meta.theme = shape.meta.theme;
-    }
-    if (shape.meta.darkMode !== undefined) {
-      meta.darkMode = shape.meta.darkMode;
     }
     if (shape.meta.pluginData !== undefined) {
       if (!isJsonSerializable(shape.meta.pluginData)) {
@@ -195,6 +164,18 @@ export function serializeDocument(doc: Document): string {
         );
       }
       meta.pluginData = shape.meta.pluginData;
+    }
+    for (const [k, v] of Object.entries(shape.meta)) {
+      if (k === "order" || k === "hiddenOn" || k === "style" || k === "pluginData") {
+        continue;
+      }
+      if (!isJsonSerializable(v)) {
+        throw new DocumentError(
+          "invalidDocument",
+          `meta.${k} on shape ${shape.id} is not JSON-serializable`,
+        );
+      }
+      meta[k] = v;
     }
     shapeRecord.meta = meta;
 

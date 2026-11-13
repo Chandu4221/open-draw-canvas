@@ -26,7 +26,7 @@ import { parseMeta } from "./meta-validation";
 import { validateDocumentDepth } from "./depth-validation";
 
 export { validateDocumentDepth } from "./depth-validation";
-export { parseMeta, parseSemantic, parseDeviceType } from "./meta-validation";
+export { parseMeta, parseDeviceType } from "./meta-validation";
 export { parseShape };
 
 function isRecord(value: unknown): value is Record<string, unknown> {

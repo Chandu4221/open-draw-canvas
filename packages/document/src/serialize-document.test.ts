@@ -1,11 +1,6 @@
 // Serialization and boundary parser behavior (R-006, R-015, R-041, R-044, ADR-0003).
 import { describe, expect, it } from "vitest";
-import {
-  DESIGN_STYLES,
-  parseCustomShapeKind,
-  parsePluginId,
-  parseShapeId,
-} from "@open-draw/contracts";
+import { parseCustomShapeKind, parsePluginId, parseShapeId } from "@open-draw/contracts";
 import { COMMANDS } from "./commands";
 import { applySetShapeBoundingBox } from "./commands/set-shape-bounding-box";
 import { createDocument } from "./document";
@@ -242,7 +237,7 @@ describe("serializeDocument & parseDocument", () => {
             order: {},
             theme: { primary: "#ff0000", surface: "#111111" },
             darkMode: true,
-            designStyle: DESIGN_STYLES.neoBrutalism,
+            designStyle: "neoBrutalism",
           },
         },
       ),
@@ -251,7 +246,7 @@ describe("serializeDocument & parseDocument", () => {
     const parsed = parseDocument(serialized);
     expect(parsed.shapes[pageId]?.meta.theme).toEqual({ primary: "#ff0000", surface: "#111111" });
     expect(parsed.shapes[pageId]?.meta.darkMode).toBe(true);
-    expect(parsed.shapes[pageId]?.meta.designStyle).toBe(DESIGN_STYLES.neoBrutalism);
+    expect(parsed.shapes[pageId]?.meta.designStyle).toBe("neoBrutalism");
   });
 
   it("throws DocumentError on unknown shape kind (not built-in and not custom format)", () => {
@@ -289,7 +284,7 @@ describe("serializeDocument & parseDocument", () => {
     expect(() => parseDocument(noSchema)).toThrow(DocumentError);
   });
 
-  it("round-trips platform, style, and semantic properties byte-stably", () => {
+  it("round-trips custom meta properties byte-stably", () => {
     const pageId = parseShapeId("page-1");
     const buttonId = parseShapeId("button-1");
 
@@ -312,14 +307,11 @@ describe("serializeDocument & parseDocument", () => {
           parent: pageId,
           meta: {
             order: {},
-            semantic: {
+            customTag: {
               id: "button",
-              platform: "web",
-              properties: {
-                variant: "primary",
-                disabled: false,
-                count: 10,
-              },
+              variant: "primary",
+              disabled: false,
+              count: 10,
             },
           },
         },
@@ -333,11 +325,15 @@ describe("serializeDocument & parseDocument", () => {
     expect(reSerialized).toBe(serialized);
     expect(parsed.shapes[pageId]?.meta.platform).toBe("web");
     expect(parsed.shapes[pageId]?.meta.style).toBe("minimal");
-    expect(parsed.shapes[buttonId]?.meta.semantic?.properties?.variant).toBe("primary");
-    expect(parsed.shapes[buttonId]?.meta.semantic?.properties?.disabled).toBe(false);
+    expect((parsed.shapes[buttonId]?.meta.customTag as { variant: string })?.variant).toBe(
+      "primary",
+    );
+    expect((parsed.shapes[buttonId]?.meta.customTag as { disabled: boolean })?.disabled).toBe(
+      false,
+    );
   });
 
-  it("throws DocumentError when semantic properties contain non-serializable values", () => {
+  it("throws DocumentError when custom meta contains non-serializable values", () => {
     const pageId = parseShapeId("page-1");
     const buttonId = parseShapeId("button-1");
 
@@ -350,12 +346,8 @@ describe("serializeDocument & parseDocument", () => {
           parent: pageId,
           meta: {
             order: {},
-            semantic: {
-              id: "button",
-              platform: "web",
-              properties: {
-                fn: (() => {}) as unknown as string,
-              },
+            customTag: {
+              fn: (() => {}) as unknown as string,
             },
           },
         },

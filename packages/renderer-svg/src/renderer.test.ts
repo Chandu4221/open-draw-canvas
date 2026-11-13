@@ -18,15 +18,12 @@ import {
   type Shape,
 } from "@open-draw/document";
 import {
-  chipOverlayToSvg,
   documentToSvg,
   fallbackShapeToSvg,
   previewLineToSvg,
   previewPenPathToSvg,
   renderSingleShapeSvg,
   selectionOverlayToSvg,
-  computeChipBounds,
-  pickChip,
   type RendererFallbackEvent,
 } from "./index";
 
@@ -263,86 +260,6 @@ describe("crayon render style (ADR-0005 D3, R-021)", () => {
     // Child rect should be rendered with crayon wobbled path
     expect(svg).toContain('<path d="M');
     expect(svg).toContain('stroke="#2d3748"');
-  });
-});
-
-describe("chip overlay (ADR-0005 D5, R-031)", () => {
-  it("counter-scales dimensions and font size with 1 / zoom", () => {
-    const box = { x: 100, y: 200, width: 300, height: 150 };
-
-    // At zoom = 1.0, scale is 1.0
-    const zoom1 = chipOverlayToSvg("Navigation Bar", box, 1.0);
-    expect(zoom1).toContain('height="16.0"');
-    expect(zoom1).toContain('font-size="10.0"');
-    expect(zoom1).toContain('y="182.0"'); // 200 - 18
-
-    // At zoom = 2.0, scale is 0.5 (world dimensions halved so screen size stays constant)
-    const zoom2 = chipOverlayToSvg("Navigation Bar", box, 2.0);
-    expect(zoom2).toContain('height="8.0"');
-    expect(zoom2).toContain('font-size="5.0"');
-    expect(zoom2).toContain('y="191.0"'); // 200 - 9
-
-    // At zoom = 0.5, scale is 2.0 (world dimensions doubled)
-    const zoomHalf = chipOverlayToSvg("Navigation Bar", box, 0.5);
-    expect(zoomHalf).toContain('height="32.0"');
-    expect(zoomHalf).toContain('font-size="20.0"');
-    expect(zoomHalf).toContain('y="164.0"'); // 200 - 36
-  });
-
-  it("rides the shape bounding box position", () => {
-    const box = { x: 450, y: 300, width: 200, height: 100 };
-    const svg = chipOverlayToSvg("Page", box, 1.0);
-    expect(svg).toContain('x="450.0"');
-    expect(svg).toContain("Page");
-  });
-
-  it("escapes hostile XML/HTML characters in chip overlay label and color options", () => {
-    const box = { x: 10, y: 10, width: 100, height: 50 };
-    const hostileChip = chipOverlayToSvg('Button & <script>alert("xss")</script>', box, 1.0, {
-      backgroundColor: '#2563eb" onload="alert(1)',
-      textColor: '#ffffff" onerror="alert(2)',
-    });
-
-    // Label should have characters escaped
-    expect(hostileChip).not.toContain("<script>");
-    expect(hostileChip).toContain(
-      "Button &amp; &lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;",
-    );
-
-    // Color attributes must not permit attribute breakouts
-    expect(hostileChip).not.toContain('onload="alert(1)"');
-    expect(hostileChip).toContain('fill="#2563eb&quot; onload=&quot;alert(1)"');
-    expect(hostileChip).not.toContain('onerror="alert(2)"');
-    expect(hostileChip).toContain('fill="#ffffff&quot; onerror=&quot;alert(2)">');
-  });
-
-  it("computes bounds and hit-tests chip overlay (R-031)", () => {
-    const box = { x: 100, y: 200, width: 300, height: 150 };
-    const bounds = computeChipBounds("Web", box, 1.0);
-
-    expect(bounds.x).toBe(100);
-    expect(bounds.y).toBe(182); // 200 - 18
-    expect(bounds.height).toBe(16);
-    expect(bounds.width).toBeGreaterThan(20);
-
-    // Hit-testing inside
-    expect(pickChip("Web", box, { x: 105, y: 190 }, 1.0)).toBe(true);
-    // Hit-testing outside
-    expect(pickChip("Web", box, { x: 50, y: 190 }, 1.0)).toBe(false);
-    expect(pickChip("Web", box, { x: 105, y: 250 }, 1.0)).toBe(false);
-  });
-
-  it("renders interactive and active chip styles", () => {
-    const box = { x: 100, y: 200, width: 300, height: 150 };
-    const activeChip = chipOverlayToSvg("Web", box, 1.0, { interactive: true, active: true });
-    expect(activeChip).toContain('data-interactive="true"');
-    expect(activeChip).toContain("cursor: pointer");
-    expect(activeChip).toContain('fill="#09090b"');
-
-    const inactiveChip = chipOverlayToSvg("Web", box, 1.0, { interactive: true, active: false });
-    expect(inactiveChip).toContain('data-interactive="true"');
-    expect(inactiveChip).toContain("cursor: pointer");
-    expect(inactiveChip).toContain('fill="#ffffff"');
   });
 });
 

@@ -9,13 +9,7 @@ import type {
   ShapeId,
   StyleId,
 } from "@open-draw/contracts";
-import {
-  EXPORT_CHIP_PREFIX,
-  isRootId,
-  SHAPE_KINDS,
-  SHAPE_KIND_LABELS,
-  STYLE_PROFILES,
-} from "@open-draw/contracts";
+import { isRootId, SHAPE_KINDS, SHAPE_KIND_LABELS, STYLE_PROFILES } from "@open-draw/contracts";
 import {
   absoluteBoundingBox,
   ancestorsOf,
@@ -207,13 +201,7 @@ export function renderSingleShapeSvg(
   const rendered = shapeToSvg(shape, absoluteBoundingBox(document, shape), shapeOptions);
 
   if (options?.includeAnnotations === true) {
-    const chipId = `${EXPORT_CHIP_PREFIX}${shape.id}`;
     const shapeIdAttr = `data-shape-id="${escapeXml(shape.id)}"`;
-    const chipIdAttr = `data-chip-id="${escapeXml(chipId)}"`;
-    const semanticAttr =
-      shape.meta.semantic !== undefined
-        ? ` data-semantic="${escapeXml(shape.meta.semantic.id)}"`
-        : "";
     const parentIdAttr = !isRootId(shape.parentId)
       ? ` data-parent-id="${escapeXml(shape.parentId)}"`
       : "";
@@ -226,10 +214,9 @@ export function renderSingleShapeSvg(
           ? SHAPE_KIND_LABELS[shape.kind as BuiltinShapeKind]
           : shape.kind);
 
-    const a11yText = `${chipId} — ${displayName}`;
-    const safeA11yText = escapeXml(a11yText);
+    const safeA11yText = escapeXml(displayName);
 
-    return `<g ${shapeIdAttr} ${chipIdAttr}${semanticAttr}${parentIdAttr} role="img" aria-label="${safeA11yText}"><title>${safeA11yText}</title>${rendered}</g>`;
+    return `<g ${shapeIdAttr}${parentIdAttr} role="img" aria-label="${safeA11yText}"><title>${safeA11yText}</title>${rendered}</g>`;
   }
 
   if (options?.wrapShapeId === true) {

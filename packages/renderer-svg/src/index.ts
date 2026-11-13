@@ -8,7 +8,6 @@ import { RENDER_STYLES } from "./document-to-svg";
 export * from "./document-to-svg";
 export * from "./styles/crayon";
 export type { ShapeSvgRenderer } from "./document-to-svg";
-export * from "./overlays";
 export * from "./escape-xml";
 
 export const HANDLE_SIZE_PX = 8;
@@ -62,10 +61,3 @@ export function previewPenPathToSvg(points: readonly Point[]): string {
   const pointsStr = points.map((p) => `${p.x},${p.y}`).join(" ");
   return `<polyline points="${pointsStr}" fill="none" stroke="${RENDER_STYLES.selectionStroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${RENDER_STYLES.selectionDasharray}" />`;
 }
-
-export {
-  computeSceneBounds,
-  documentToSvgWithLegend,
-  type ExportSvgOptions,
-  type LegendItem,
-} from "./export-image";

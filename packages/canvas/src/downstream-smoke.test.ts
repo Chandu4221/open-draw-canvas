@@ -119,7 +119,7 @@ describe("Downstream Package Packaging & Surface (ADR-0008, R-002, R-004)", () =
   });
 
   it("verifies built bundle exports and runs headless canvas workflow (ADR-0008 D1)", () => {
-    expect(CANVAS_VERSION).toBe("0.9.0");
+    expect(CANVAS_VERSION).toBe(packageJson.version);
 
     const canvas = createCanvas();
     const rectId = parseShapeId("rect-smoke-1");

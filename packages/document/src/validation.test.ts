@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DESIGN_STYLES, parseShapeId, ROOT_ID, ROOT_ROLES } from "@open-draw/contracts";
+import { parseShapeId, ROOT_ID } from "@open-draw/contracts";
 import type { Shape } from "./shape";
 import { createEllipse, createPage, createRect, createSection, createText } from "./shape";
 import { DocumentError } from "./errors";
@@ -118,24 +118,22 @@ describe("parseDocument", () => {
     expect(() => parseDocument(input)).toThrow(DocumentError);
   });
 
-  it("accepts platform and style on root pages (R-026)", () => {
+  it("accepts style on root pages (R-026)", () => {
     const rootPage = createPage(
       parseShapeId("page-1"),
       { x: 0, y: 0, width: 1440, height: 900 },
       {
         meta: {
           order: {},
-          platform: "web",
           style: "minimal",
         },
       },
     );
     const document = parseDocument(serialize([rootPage]));
-    expect(document.shapes[parseShapeId("page-1")]?.meta.platform).toBe("web");
     expect(document.shapes[parseShapeId("page-1")]?.meta.style).toBe("minimal");
   });
 
-  it("accepts platform and style on root rects (R-026)", () => {
+  it("accepts style on root rects (R-026)", () => {
     const rootRect = createRect(
       parseShapeId("root-rect-1"),
       { x: 0, y: 0, width: 640, height: 480 },
@@ -143,13 +141,11 @@ describe("parseDocument", () => {
         parent: ROOT_ID,
         meta: {
           order: {},
-          platform: "androidNative",
           style: "minimal",
         },
       },
     );
     const document = parseDocument(serialize([rootRect]));
-    expect(document.shapes[parseShapeId("root-rect-1")]?.meta.platform).toBe("androidNative");
     expect(document.shapes[parseShapeId("root-rect-1")]?.meta.style).toBe("minimal");
   });
 
@@ -168,171 +164,12 @@ describe("parseDocument", () => {
     expect(document.shapes[parseShapeId("child-rect-1")]?.parentId).toBe("root-rect-1");
   });
 
-  it("rejects platform on non-root shapes (R-026)", () => {
-    const input = serialize([page, section, rect]) as {
-      shapes: Record<string, Record<string, unknown>>;
-    };
-    input.shapes["rect-1"]!.meta = { order: {}, platform: "web" };
-    expect(() => parseDocument(input)).toThrow(/platform may only be set on root shapes/);
-  });
-
   it("rejects style on non-root shapes (R-026)", () => {
     const input = serialize([page, section, rect]) as {
       shapes: Record<string, Record<string, unknown>>;
     };
     input.shapes["section-1"]!.meta = { order: {}, style: "minimal" };
     expect(() => parseDocument(input)).toThrow(/style may only be set on root shapes/);
-  });
-
-  it("accepts designStyle on root shapes and rejects on non-root shapes (R-026)", () => {
-    const rootPage = createPage(
-      parseShapeId("page-1"),
-      { x: 0, y: 0, width: 1440, height: 900 },
-      {
-        meta: {
-          order: {},
-          designStyle: DESIGN_STYLES.neoBrutalism,
-        },
-      },
-    );
-    const doc = parseDocument(serialize([rootPage]));
-    expect(doc.shapes[parseShapeId("page-1")]?.meta.designStyle).toBe(DESIGN_STYLES.neoBrutalism);
-
-    const nonRootInput = serialize([page, section, rect]) as {
-      shapes: Record<string, Record<string, unknown>>;
-    };
-    nonRootInput.shapes["rect-1"]!.meta = {
-      order: {},
-      designStyle: DESIGN_STYLES.neoBrutalism,
-    };
-    expect(() => parseDocument(nonRootInput)).toThrow(/designStyle may only be set on root shapes/);
-  });
-
-  it("rejects invalid designStyle", () => {
-    const input = serialize([page]) as {
-      shapes: Record<string, Record<string, unknown>>;
-    };
-    input.shapes["page-1"]!.meta = { order: {}, designStyle: "invalid-design-style" };
-    expect(() => parseDocument(input)).toThrow(DocumentError);
-  });
-
-  it("accepts role on root shapes and rejects on non-root shapes (R-026)", () => {
-    const rootComponent = createRect(
-      parseShapeId("rect-comp-1"),
-      { x: 0, y: 0, width: 300, height: 200 },
-      {
-        parent: ROOT_ID,
-        meta: {
-          order: {},
-          role: ROOT_ROLES.component,
-        },
-      },
-    );
-    const doc = parseDocument(serialize([rootComponent]));
-    expect(doc.shapes[parseShapeId("rect-comp-1")]?.meta.role).toBe(ROOT_ROLES.component);
-
-    // Serialization round-trip
-    const serialized = serializeDocument(doc);
-    expect(serialized).toContain('"role": "component"');
-    const roundTripped = parseDocument(JSON.parse(serialized));
-    expect(roundTripped.shapes[parseShapeId("rect-comp-1")]?.meta.role).toBe(ROOT_ROLES.component);
-
-    const nonRootInput = serialize([page, section, rect]) as {
-      shapes: Record<string, Record<string, unknown>>;
-    };
-    nonRootInput.shapes["rect-1"]!.meta = {
-      order: {},
-      role: ROOT_ROLES.component,
-    };
-    expect(() => parseDocument(nonRootInput)).toThrow(/role may only be set on root shapes/);
-  });
-
-  it("rejects invalid role in meta", () => {
-    const input = serialize([page]) as {
-      shapes: Record<string, Record<string, unknown>>;
-    };
-    input.shapes["page-1"]!.meta = { order: {}, role: "invalid-role" };
-    expect(() => parseDocument(input)).toThrow(DocumentError);
-  });
-
-  it("parses valid theme and darkMode on root shapes and rejects on non-root shapes (R-026)", () => {
-    const rootInput = serialize([page]) as {
-      shapes: Record<string, Record<string, unknown>>;
-    };
-    rootInput.shapes["page-1"]!.meta = {
-      order: {},
-      theme: { primary: "#2563eb", surface: "#ffffff" },
-      darkMode: true,
-    };
-    const doc = parseDocument(rootInput);
-    expect(doc.shapes[parseShapeId("page-1")]?.meta.theme?.primary).toBe("#2563eb");
-    expect(doc.shapes[parseShapeId("page-1")]?.meta.darkMode).toBe(true);
-
-    // Reject theme on non-root
-    const nonRootThemeInput = serialize([page, section, rect]) as {
-      shapes: Record<string, Record<string, unknown>>;
-    };
-    nonRootThemeInput.shapes["rect-1"]!.meta = {
-      order: {},
-      theme: { primary: "#2563eb" },
-    };
-    expect(() => parseDocument(nonRootThemeInput)).toThrow(/theme may only be set on root shapes/);
-
-    // Reject darkMode on non-root
-    const nonRootDarkInput = serialize([page, section, rect]) as {
-      shapes: Record<string, Record<string, unknown>>;
-    };
-    nonRootDarkInput.shapes["rect-1"]!.meta = {
-      order: {},
-      darkMode: true,
-    };
-    expect(() => parseDocument(nonRootDarkInput)).toThrow(
-      /darkMode may only be set on root shapes/,
-    );
-  });
-
-  it("validates semantic tag and properties envelope (R-044)", () => {
-    const input = serialize([page, section, rect]) as {
-      shapes: Record<string, Record<string, unknown>>;
-    };
-    input.shapes["rect-1"]!.meta = {
-      order: {},
-      semantic: {
-        id: "button",
-        platform: "web",
-        properties: { variant: "primary", disabled: false, count: 5 },
-      },
-    };
-    const document = parseDocument(input);
-    expect(document.shapes[parseShapeId("rect-1")]?.meta.semantic?.properties?.variant).toBe(
-      "primary",
-    );
-
-    // Reject non-primitive property values
-    const invalidInput = serialize([page, section, rect]) as {
-      shapes: Record<string, Record<string, unknown>>;
-    };
-    invalidInput.shapes["rect-1"]!.meta = {
-      order: {},
-      semantic: {
-        id: "button",
-        platform: "web",
-        properties: { nested: { invalid: true } },
-      },
-    };
-    expect(() => parseDocument(invalidInput)).toThrow(/semantic property.*must be a string/);
-  });
-
-  it("permits meta.semantic: null for untagged shapes from JSON export", () => {
-    const input = serialize([page, section, rect]) as {
-      shapes: Record<string, Record<string, unknown>>;
-    };
-    input.shapes["rect-1"]!.meta = {
-      order: {},
-      semantic: null,
-    };
-    const document = parseDocument(input);
-    expect(document.shapes[parseShapeId("rect-1")]?.meta.semantic).toBeUndefined();
   });
 
   describe("document depth limits (Ruling V1, Task S2)", () => {
@@ -519,47 +356,6 @@ describe("parseDocument", () => {
       };
       invalidNanHeight.shapes["page-1"]!.boundingBox.height = NaN;
       expect(() => parseDocument(invalidNanHeight)).toThrow(DocumentError);
-    });
-  });
-
-  describe("theme validation (B14, B15)", () => {
-    it("rejects non-hex color values in theme", () => {
-      const input = serialize([page]) as {
-        shapes: Record<string, { meta?: Record<string, unknown> }>;
-      };
-      input.shapes["page-1"]!.meta = { theme: { primary: "blue" } };
-      expect(() => parseDocument(input)).toThrow(DocumentError);
-
-      input.shapes["page-1"]!.meta = { theme: { primary: "#12345" } };
-      expect(() => parseDocument(input)).toThrow(DocumentError);
-
-      input.shapes["page-1"]!.meta = { theme: { primary: "<script>" } };
-      expect(() => parseDocument(input)).toThrow(DocumentError);
-    });
-
-    it("rejects unknown theme slots outside THEME_PALETTE_SLOTS", () => {
-      const input = serialize([page]) as {
-        shapes: Record<string, { meta?: Record<string, unknown> }>;
-      };
-      input.shapes["page-1"]!.meta = { theme: { unknownSlot: "#1d4ed8" } };
-      expect(() => parseDocument(input)).toThrow(DocumentError);
-    });
-
-    it("accepts valid 3, 6, and 8 hex character colors in known slots", () => {
-      const input = serialize([page]) as {
-        shapes: Record<string, { meta?: Record<string, unknown> }>;
-      };
-      input.shapes["page-1"]!.meta = {
-        theme: {
-          primary: "#1d4ed8",
-          secondary: "#fff",
-          surface: "#ffffffcc",
-        },
-      };
-      const doc = parseDocument(input);
-      expect(doc.shapes[parseShapeId("page-1")]?.meta.theme?.primary).toBe("#1d4ed8");
-      expect(doc.shapes[parseShapeId("page-1")]?.meta.theme?.secondary).toBe("#fff");
-      expect(doc.shapes[parseShapeId("page-1")]?.meta.theme?.surface).toBe("#ffffffcc");
     });
   });
 
