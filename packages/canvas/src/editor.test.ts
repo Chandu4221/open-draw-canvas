@@ -1,6 +1,6 @@
 // Standalone editor behavior tests (R-015: describe = subject, it = behavior).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { parseShapeId, ROOT_ID } from "@open-draw/contracts";
+import { parsePluginId, parseShapeId, ROOT_ID } from "@open-draw/contracts";
 import { COMMANDS, createDocument, createRect } from "@open-draw/document";
 import { createEditor, type Editor } from "./editor";
 import { CONTROLLER_EVENTS } from "./events";
@@ -2552,5 +2552,51 @@ describe("createEditor", () => {
     expect(patchedOuterHtml.get("r-1")).toContain('fill="#111111"');
     expect(patchedOuterHtml.get("r-5")).toContain('fill="#555555"');
     expect(innerHtmlAssigned).toBe(false);
+  });
+
+  describe("setShapePluginData API", () => {
+    it("sets, undoes, redoes, and serializes namespaced plugin data on shapes", () => {
+      const container = new MockDomNode("div");
+      const shapeId = parseShapeId("rect-plugin-1");
+      const doc = createDocument([
+        createRect(shapeId, { x: 10, y: 10, width: 100, height: 100 }, { parentId: ROOT_ID }),
+      ]);
+      const editor = createEditor(container as unknown as HTMLElement, { document: doc });
+      const pluginId = parsePluginId("open-draw:wireframe");
+
+      let docChangedCalls = 0;
+      editor.subscribe(CONTROLLER_EVENTS.documentChanged, () => {
+        docChangedCalls += 1;
+      });
+
+      // 1. Set plugin data
+      editor.setShapePluginData(shapeId, pluginId, { role: "button", theme: "dark" });
+
+      expect(docChangedCalls).toBe(1);
+      const updatedShape = editor.getDocument().shapes[shapeId];
+      expect(updatedShape?.meta.pluginData?.[pluginId]).toEqual({ role: "button", theme: "dark" });
+
+      // 2. Serialized JSON includes pluginData
+      const json = editor.toJson();
+      expect(json).toContain("open-draw:wireframe");
+      expect(json).toContain('"theme": "dark"');
+
+      // 3. Undo restores previous undefined pluginData
+      expect(editor.canUndo()).toBe(true);
+      editor.undo();
+      expect(editor.getDocument().shapes[shapeId]?.meta.pluginData).toBeUndefined();
+
+      // 4. Redo reapplies the pluginData
+      expect(editor.canRedo()).toBe(true);
+      editor.redo();
+      expect(editor.getDocument().shapes[shapeId]?.meta.pluginData?.[pluginId]).toEqual({
+        role: "button",
+        theme: "dark",
+      });
+
+      // 5. Clear plugin data with null
+      editor.setShapePluginData(shapeId, pluginId, null);
+      expect(editor.getDocument().shapes[shapeId]?.meta.pluginData).toBeUndefined();
+    });
   });
 });

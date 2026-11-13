@@ -12,6 +12,7 @@ import type { SetShapeOrder } from "./set-shape-order";
 import type { SetShapeStyle } from "./set-shape-style";
 import type { SetShapeContent } from "./set-shape-content";
 import type { DuplicateShapes } from "./duplicate-shapes";
+import type { SetShapePluginData } from "./set-shape-plugin-data";
 
 export { COMMANDS } from "./registry";
 export type { CommandId } from "./registry";
@@ -39,6 +40,8 @@ export type { SetShapeContent } from "./set-shape-content";
 export { applySetShapeContent } from "./set-shape-content";
 export type { DuplicateShapes } from "./duplicate-shapes";
 export { applyDuplicateShapes } from "./duplicate-shapes";
+export type { SetShapePluginData } from "./set-shape-plugin-data";
+export { applySetShapePluginData } from "./set-shape-plugin-data";
 
 export type Command =
   | CreateShape
@@ -52,7 +55,8 @@ export type Command =
   | SetShapeOrder
   | SetShapeStyle
   | SetShapeContent
-  | DuplicateShapes;
+  | DuplicateShapes
+  | SetShapePluginData;
 
 export interface CommandResult {
   readonly document: Document;

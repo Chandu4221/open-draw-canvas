@@ -1,7 +1,7 @@
 // Mutates a shape record in-place for a single command and returns inverse commands.
 // Used by applyTransaction to batch N commands in O(N) without intermediate Document copying (R-018, ADR-0002 D8).
-import type { DeviceType, ShapeId } from "@open-draw/contracts";
-import { isRootId, SHAPE_KINDS } from "@open-draw/contracts";
+import type { DeviceType, PluginId, ShapeId } from "@open-draw/contracts";
+import { isRootId, parsePluginId, SHAPE_KINDS } from "@open-draw/contracts";
 import { COMMANDS } from "./commands/registry";
 import type { Command } from "./commands";
 import type { CreateShape } from "./commands/create-shape";
@@ -412,6 +412,42 @@ export function applyCommandToMap(
         type: COMMANDS.deleteShape,
         id: idMap.get(oldId)!,
       }));
+    }
+
+    case COMMANDS.setShapePluginData: {
+      const shape = shapes[command.id];
+      if (shape === undefined) {
+        throw new DocumentError("shapeNotFound", `no shape with id: ${command.id}`);
+      }
+      const pluginId = parsePluginId(command.pluginId);
+      const previousData = shape.meta.pluginData?.[pluginId] ?? null;
+      if (previousData === command.data) {
+        return [];
+      }
+      const nextPluginData: Record<PluginId, unknown> = {
+        ...(shape.meta.pluginData ?? {}),
+      };
+      if (command.data === null || command.data === undefined) {
+        delete nextPluginData[pluginId];
+      } else {
+        nextPluginData[pluginId] = command.data;
+      }
+      const nextMeta = {
+        ...shape.meta,
+        ...(Object.keys(nextPluginData).length === 0 ? {} : { pluginData: nextPluginData }),
+      };
+      if (Object.keys(nextPluginData).length === 0) {
+        delete (nextMeta as { pluginData?: unknown }).pluginData;
+      }
+      shapes[command.id] = { ...shape, meta: nextMeta };
+      return [
+        {
+          type: COMMANDS.setShapePluginData,
+          id: command.id,
+          pluginId,
+          data: previousData,
+        },
+      ];
     }
   }
 }

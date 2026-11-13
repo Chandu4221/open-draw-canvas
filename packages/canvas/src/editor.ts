@@ -5,6 +5,7 @@ import {
   type BoundingBox,
   type CustomShapeKind,
   type DeviceType,
+  type PluginId,
   type Point,
   type ShapeId,
 } from "@open-draw/contracts";
@@ -62,7 +63,8 @@ function isPropertyMutationCommand(cmd: Command): boolean {
     cmd.type === COMMANDS.setShapeStyle ||
     cmd.type === COMMANDS.setShapeLabel ||
     cmd.type === COMMANDS.setShapeContent ||
-    cmd.type === COMMANDS.setShapeHiddenOn
+    cmd.type === COMMANDS.setShapeHiddenOn ||
+    cmd.type === COMMANDS.setShapePluginData
   );
 }
 
@@ -524,6 +526,9 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     },
     setShapeOrder: (id: ShapeId, deviceType: DeviceType, order: number | null) => {
       execute([{ type: COMMANDS.setShapeOrder, id, deviceType, order }]);
+    },
+    setShapePluginData: (id: ShapeId, pluginId: PluginId, data: unknown | null) => {
+      execute([{ type: COMMANDS.setShapePluginData, id, pluginId, data }]);
     },
     execute,
     undo: () => applyHistory(undo(doc, history)),

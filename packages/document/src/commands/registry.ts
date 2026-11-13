@@ -13,6 +13,7 @@ export const COMMANDS = {
   setShapeStyle: "SetShapeStyle",
   setShapeContent: "SetShapeContent",
   duplicateShapes: "DuplicateShapes",
+  setShapePluginData: "SetShapePluginData",
 } as const;
 
 export type CommandId = (typeof COMMANDS)[keyof typeof COMMANDS];

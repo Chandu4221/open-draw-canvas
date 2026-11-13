@@ -2,6 +2,7 @@ import type {
   BoundingBox,
   CustomShapeKind,
   DeviceType,
+  PluginId,
   Point,
   ShapeId,
 } from "@open-draw/contracts";
@@ -75,6 +76,7 @@ export interface Editor {
     },
   ): void;
   setShapeOrder(id: ShapeId, deviceType: DeviceType, order: number | null): void;
+  setShapePluginData(id: ShapeId, pluginId: PluginId, data: unknown | null): void;
   execute(commands: Command | readonly Command[], options?: { record?: boolean }): void;
   undo(): boolean;
   redo(): boolean;

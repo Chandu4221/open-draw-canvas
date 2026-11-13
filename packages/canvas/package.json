@@ -1,6 +1,6 @@
 {
   "name": "@open-draw/canvas",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "description": "A framework-free, batteries-included visual canvas and drawing SDK",
   "license": "MIT",
   "type": "module",
