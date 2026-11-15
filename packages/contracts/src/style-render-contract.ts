@@ -2,6 +2,20 @@
 // Pure data types and registries, zero dependencies (R-002, R-005, R-021).
 
 /**
+ * Closed registry of shape fill styles (R-005, R-007).
+ */
+export const FILL_STYLES = {
+  none: "none",
+  subtle: "subtle",
+  solid: "solid",
+  hatch: "hatch",
+} as const;
+
+export type FillStyle = (typeof FILL_STYLES)[keyof typeof FILL_STYLES];
+
+export const FILL_STYLE_VALUES: ReadonlySet<string> = new Set(Object.values(FILL_STYLES));
+
+/**
  * Closed registry of style profiles (R-021).
  */
 export const STYLE_PROFILES = {

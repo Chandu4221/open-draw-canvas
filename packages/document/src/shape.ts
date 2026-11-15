@@ -5,6 +5,7 @@ import type {
   BoundingBox,
   CustomShapeKind,
   DeviceType,
+  FillStyle,
   PluginId,
   Point,
   ShapeId,
@@ -13,7 +14,7 @@ import type {
 } from "@open-draw/contracts";
 import { ROOT_ID, SHAPE_KINDS, SHAPE_KIND_VALUES, isRootId } from "@open-draw/contracts";
 import { DocumentError } from "./errors";
-import { parseColor, parseStrokeWidth } from "./style-validation";
+import { parseColor, parseFillStyle, parseStrokeWidth } from "./style-validation";
 
 // Section flow direction: stored and validated now, consumed by the derive
 // pipeline later (ADR-0002 D7).
@@ -45,6 +46,7 @@ export interface BaseShape {
   readonly fill?: string;
   readonly stroke?: string;
   readonly strokeWidth?: number;
+  readonly fillStyle?: FillStyle;
   readonly meta: ShapeMeta;
 }
 
@@ -58,6 +60,7 @@ export const BASE_SHAPE_KEYS = {
   fill: "fill",
   stroke: "stroke",
   strokeWidth: "strokeWidth",
+  fillStyle: "fillStyle",
   meta: "meta",
 } as const satisfies Record<keyof BaseShape, string>;
 
@@ -117,6 +120,7 @@ export interface ShapeInit {
   readonly fill?: string;
   readonly stroke?: string;
   readonly strokeWidth?: number;
+  readonly fillStyle?: FillStyle;
   readonly meta?: ShapeMeta;
 }
 
@@ -156,6 +160,10 @@ function baseInit(
   if (init.strokeWidth !== undefined) {
     strokeWidth = parseStrokeWidth(init.strokeWidth);
   }
+  let fillStyle: FillStyle | undefined;
+  if (init.fillStyle !== undefined) {
+    fillStyle = parseFillStyle(init.fillStyle);
+  }
   return {
     id,
     kind,
@@ -166,6 +174,7 @@ function baseInit(
     ...(fill === undefined ? {} : { fill }),
     ...(stroke === undefined ? {} : { stroke }),
     ...(strokeWidth === undefined ? {} : { strokeWidth }),
+    ...(fillStyle === undefined ? {} : { fillStyle }),
     meta: init.meta ?? DEFAULT_META,
   };
 }

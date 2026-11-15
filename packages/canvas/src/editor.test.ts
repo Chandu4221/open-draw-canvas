@@ -1,6 +1,6 @@
 // Standalone editor behavior tests (R-015: describe = subject, it = behavior).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { parsePluginId, parseShapeId, ROOT_ID } from "@open-draw/contracts";
+import { FILL_STYLES, parsePluginId, parseShapeId, ROOT_ID } from "@open-draw/contracts";
 import { COMMANDS, createDocument, createRect } from "@open-draw/document";
 import { createEditor, type Editor } from "./editor";
 import { CONTROLLER_EVENTS } from "./events";
@@ -623,18 +623,17 @@ describe("createEditor", () => {
       document: createDocument([rect]),
     });
 
-    (
-      editor as unknown as {
-        setShapeStyle: (
-          id: string,
-          style: { fill?: string; stroke?: string; strokeWidth?: number },
-        ) => void;
-      }
-    ).setShapeStyle(rect.id, { fill: "#ff0000", stroke: "#000000", strokeWidth: 2 });
+    editor.setShapeStyle(rect.id, {
+      fill: "#ff0000",
+      stroke: "#000000",
+      strokeWidth: 2,
+      fillStyle: FILL_STYLES.none,
+    });
     const styled = editor.getDocument().shapes[rect.id]!;
     expect(styled.fill).toBe("#ff0000");
     expect(styled.stroke).toBe("#000000");
     expect(styled.strokeWidth).toBe(2);
+    expect(styled.fillStyle).toBe(FILL_STYLES.none);
 
     (
       editor as unknown as {

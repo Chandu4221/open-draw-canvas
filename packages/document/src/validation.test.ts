@@ -379,4 +379,30 @@ describe("parseDocument", () => {
       expect(() => parseDocument(input)).toThrowError(/boundingBox/);
     });
   });
+
+  describe("fillStyle validation (R-005, R-006)", () => {
+    it("accepts valid fillStyle values and rejects invalid values", () => {
+      const validDoc = serialize([
+        page,
+        createRect(
+          parseShapeId("rect-fill"),
+          { x: 10, y: 10, width: 100, height: 50 },
+          { parentId: parseShapeId("page-1"), fillStyle: "none" },
+        ),
+      ]);
+      const parsed = parseDocument(validDoc);
+      expect(parsed.shapes[parseShapeId("rect-fill")]?.fillStyle).toBe("none");
+
+      const invalidDoc = serialize([
+        page,
+        createRect(
+          parseShapeId("rect-fill-bad"),
+          { x: 10, y: 10, width: 100, height: 50 },
+          { parentId: parseShapeId("page-1") },
+        ),
+      ]) as { shapes: Record<string, Record<string, unknown>> };
+      invalidDoc.shapes["rect-fill-bad"]!.fillStyle = "stripes";
+      expect(() => parseDocument(invalidDoc)).toThrowError(/fillStyle must be one of/);
+    });
+  });
 });

@@ -1,6 +1,11 @@
 // Serialization and boundary parser behavior (R-006, R-015, R-041, R-044, ADR-0003).
 import { describe, expect, it } from "vitest";
-import { parseCustomShapeKind, parsePluginId, parseShapeId } from "@open-draw/contracts";
+import {
+  FILL_STYLES,
+  parseCustomShapeKind,
+  parsePluginId,
+  parseShapeId,
+} from "@open-draw/contracts";
 import { COMMANDS } from "./commands";
 import { applySetShapeBoundingBox } from "./commands/set-shape-bounding-box";
 import { createDocument } from "./document";
@@ -247,6 +252,48 @@ describe("serializeDocument & parseDocument", () => {
     expect(parsed.shapes[pageId]?.meta.theme).toEqual({ primary: "#ff0000", surface: "#111111" });
     expect(parsed.shapes[pageId]?.meta.darkMode).toBe(true);
     expect(parsed.shapes[pageId]?.meta.designStyle).toBe("neoBrutalism");
+  });
+
+  it("round-trips shape fillStyle byte-stably across all variants (R-005, R-041)", () => {
+    const pageId = parseShapeId("page-1");
+    const rNone = parseShapeId("r-none");
+    const rSubtle = parseShapeId("r-subtle");
+    const rSolid = parseShapeId("r-solid");
+    const rHatch = parseShapeId("r-hatch");
+
+    const doc = createDocument([
+      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
+      createRect(
+        rNone,
+        { x: 10, y: 10, width: 100, height: 50 },
+        { parent: pageId, fillStyle: FILL_STYLES.none },
+      ),
+      createRect(
+        rSubtle,
+        { x: 120, y: 10, width: 100, height: 50 },
+        { parent: pageId, fillStyle: FILL_STYLES.subtle },
+      ),
+      createRect(
+        rSolid,
+        { x: 230, y: 10, width: 100, height: 50 },
+        { parent: pageId, fillStyle: FILL_STYLES.solid },
+      ),
+      createRect(
+        rHatch,
+        { x: 340, y: 10, width: 100, height: 50 },
+        { parent: pageId, fillStyle: FILL_STYLES.hatch },
+      ),
+    ]);
+
+    const serialized = serializeDocument(doc);
+    const parsed = parseDocument(serialized);
+    const reSerialized = serializeDocument(parsed);
+
+    expect(reSerialized).toBe(serialized);
+    expect(parsed.shapes[rNone]?.fillStyle).toBe(FILL_STYLES.none);
+    expect(parsed.shapes[rSubtle]?.fillStyle).toBe(FILL_STYLES.subtle);
+    expect(parsed.shapes[rSolid]?.fillStyle).toBe(FILL_STYLES.solid);
+    expect(parsed.shapes[rHatch]?.fillStyle).toBe(FILL_STYLES.hatch);
   });
 
   it("throws DocumentError on unknown shape kind (not built-in and not custom format)", () => {

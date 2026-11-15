@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-11-15
+
 ### Added
+
+- **Shape Fill Styles (R-005, R-016, R-021)**: Added `FILL_STYLES` closed registry (`none`, `subtle`, `solid`, `hatch`) to contracts. Shapes support `fillStyle` with transparent (`none`) backgrounds, semi-transparent tints (`subtle`), solid colors (`solid`), and SVG `<pattern>` cross-hatching (`hatch`).
+- **Style Command Integration (R-016, ADR-0006)**: Extended `SetShapeStyle` command and `applySetShapeStyle` with full inverse undo/redo support for `fillStyle`.
+- **Renderer Fill Resolution (R-008, R-021)**: Pure `resolveShapeFill()` helper supporting instance-scoped SVG pattern defs and deterministic fills in both minimal and crayon/hand-drawn style profiles.
+- **Editor Style API (ADR-0008)**: Updated `editor.setShapeStyle()` interface to accept `fillStyle?: FillStyle | null`.
 
 - **Spatial Index Lifecycle & Canonical Equivalence (ADR-0011, R-016)**: Added `invalidateSpatialIndex()` on `CanvasController` and canonical fallback for spatial equivalence checking when map key order varies without geometric drift.
 - **Transaction-Driven Incremental SVG Patching (R-016, R-018)**: Incremental DOM `outerHTML` patching for in-place property mutations across multi-selections of any size, eliminating full SVG scene re-serialization.

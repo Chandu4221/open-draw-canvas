@@ -14,7 +14,7 @@ import { pruneSelectedDescendants } from "./reparent";
 import { isCustomShape, type Shape } from "./shape";
 import { subtreeOf } from "./tree";
 import { parseShape } from "./validation";
-import { parseColor, parseStrokeWidth } from "./style-validation";
+import { parseColor, parseFillStyle, parseStrokeWidth } from "./style-validation";
 
 function areHiddenOnEqual(
   a: readonly DeviceType[] | undefined | null,
@@ -279,6 +279,7 @@ export function applyCommandToMap(
       const previousFill = shape.fill === undefined ? null : shape.fill;
       const previousStroke = shape.stroke === undefined ? null : shape.stroke;
       const previousStrokeWidth = shape.strokeWidth === undefined ? null : shape.strokeWidth;
+      const previousFillStyle = shape.fillStyle === undefined ? null : shape.fillStyle;
 
       const targetFill =
         command.fill === undefined
@@ -298,11 +299,18 @@ export function applyCommandToMap(
           : command.strokeWidth === null
             ? undefined
             : parseStrokeWidth(command.strokeWidth);
+      const targetFillStyle =
+        command.fillStyle === undefined
+          ? shape.fillStyle
+          : command.fillStyle === null
+            ? undefined
+            : parseFillStyle(command.fillStyle);
 
       if (
         shape.fill === targetFill &&
         shape.stroke === targetStroke &&
-        shape.strokeWidth === targetStrokeWidth
+        shape.strokeWidth === targetStrokeWidth &&
+        shape.fillStyle === targetFillStyle
       ) {
         return [];
       }
@@ -329,6 +337,13 @@ export function applyCommandToMap(
           nextShapeData.strokeWidth = targetStrokeWidth;
         }
       }
+      if (command.fillStyle !== undefined) {
+        if (targetFillStyle === undefined) {
+          delete nextShapeData.fillStyle;
+        } else {
+          nextShapeData.fillStyle = targetFillStyle;
+        }
+      }
 
       shapes[command.id] = nextShapeData as unknown as Shape;
       return [
@@ -338,6 +353,7 @@ export function applyCommandToMap(
           fill: previousFill,
           stroke: previousStroke,
           strokeWidth: previousStrokeWidth,
+          fillStyle: previousFillStyle,
         },
       ];
     }

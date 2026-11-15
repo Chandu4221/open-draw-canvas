@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   type CustomShapeKind,
   DEVICE_TYPES,
+  FILL_STYLES,
   MAX_DOCUMENT_DEPTH,
   parseCustomShapeKind,
   parseShapeId,
@@ -455,5 +456,87 @@ describe("visible text on shapes (F2, ADR-0006 Option A / shape.content)", () =>
     expect(svg).toContain('x="0" y="0"');
     expect(svg).not.toContain('x="100" y="100"');
     expect(svg).toContain('x="200" y="200"');
+  });
+
+  describe("shape fillStyle rendering (R-005, R-021)", () => {
+    it("renders fill=none for fillStyle=none (transparent background)", () => {
+      const pageId = parseShapeId("page-1");
+      const rectId = parseShapeId("rect-transparent");
+      const doc = createDocument([
+        createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
+        createRect(
+          rectId,
+          { x: 10, y: 20, width: 100, height: 50 },
+          { parent: pageId, fillStyle: FILL_STYLES.none },
+        ),
+      ]);
+      const svg = documentToSvg(doc);
+      expect(svg).toContain(
+        '<rect x="10" y="20" width="100" height="50" fill="none" stroke="#1f2933" />',
+      );
+    });
+
+    it("renders fill-opacity=0.1 for fillStyle=subtle", () => {
+      const pageId = parseShapeId("page-1");
+      const rectId = parseShapeId("rect-subtle");
+      const doc = createDocument([
+        createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
+        createRect(
+          rectId,
+          { x: 10, y: 20, width: 100, height: 50 },
+          { parent: pageId, fillStyle: FILL_STYLES.subtle },
+        ),
+      ]);
+      const svg = documentToSvg(doc);
+      expect(svg).toContain('fill="#1f2933" stroke="#1f2933" fill-opacity="0.1"');
+    });
+
+    it("renders solid fill for fillStyle=solid", () => {
+      const pageId = parseShapeId("page-1");
+      const rectId = parseShapeId("rect-solid");
+      const doc = createDocument([
+        createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
+        createRect(
+          rectId,
+          { x: 10, y: 20, width: 100, height: 50 },
+          { parent: pageId, fillStyle: FILL_STYLES.solid, fill: "#3b82f6" },
+        ),
+      ]);
+      const svg = documentToSvg(doc);
+      expect(svg).toContain('fill="#3b82f6" stroke="#1f2933"');
+    });
+
+    it("renders SVG pattern defs and fill=url(#...) for fillStyle=hatch", () => {
+      const pageId = parseShapeId("page-1");
+      const rectId = parseShapeId("rect-hatch");
+      const doc = createDocument([
+        createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
+        createRect(
+          rectId,
+          { x: 10, y: 20, width: 100, height: 50 },
+          { parent: pageId, fillStyle: FILL_STYLES.hatch, stroke: "#ef4444" },
+        ),
+      ]);
+      const svg = documentToSvg(doc, { instanceId: "inst1" });
+      expect(svg).toContain('<defs><pattern id="od-pattern-hatch-inst1-rect-hatch"');
+      expect(svg).toContain('patternTransform="rotate(45 0 0)"');
+      expect(svg).toContain('stroke="#ef4444"');
+      expect(svg).toContain('fill="url(#od-pattern-hatch-inst1-rect-hatch)"');
+    });
+
+    it("renders fillStyle in crayon / hand-drawn mode (R-021)", () => {
+      const pageId = parseShapeId("page-1");
+      const rectId = parseShapeId("rect-crayon-transp");
+      const doc = createDocument([
+        createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
+        createRect(
+          rectId,
+          { x: 10, y: 20, width: 100, height: 50 },
+          { parent: pageId, fillStyle: FILL_STYLES.none },
+        ),
+      ]);
+      const svg = documentToSvg(doc, { styleProfile: "crayon" });
+      expect(svg).toContain('fill="none"');
+    });
   });
 });

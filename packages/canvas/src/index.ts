@@ -1,7 +1,7 @@
 /// @open-draw/canvas — public SDK contract surface (R-004, R-010, R-036, ADR-0008).
 /// Pure interaction core and batteries-included visual canvas controller.
 
-export const CANVAS_VERSION = "0.9.2" as const;
+export const CANVAS_VERSION = "0.9.3" as const;
 
 export {
   type Camera,
@@ -178,6 +178,9 @@ export {
   type StyleId,
   STYLE_PROFILES,
   type StyleProfile,
+  type FillStyle,
+  FILL_STYLES,
+  FILL_STYLE_VALUES,
   type PluginId,
   isValidPluginId,
   parsePluginId,
@@ -205,6 +208,8 @@ export {
   type Command,
   COMMANDS,
   type CommandId,
+  type SetShapeStyle,
+  applySetShapeStyle,
   type SetShapePluginData,
   applySetShapePluginData,
   shapeListInOrder,
@@ -254,6 +259,8 @@ export {
   documentToSvg,
   shapeToSvg,
   fallbackShapeToSvg,
+  resolveShapeFill,
+  type ResolvedFill,
   RENDER_STYLES,
   type RenderOptions,
   type ShapeSvgRenderer,

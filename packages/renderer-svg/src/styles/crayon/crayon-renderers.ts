@@ -4,6 +4,7 @@ import type { BoundingBox } from "@open-draw/contracts";
 import { SHAPE_KINDS } from "@open-draw/contracts";
 import type { LineShape, PenPathShape, Shape } from "@open-draw/document";
 import { escapeXml } from "../../escape-xml";
+import { resolveShapeFill, type ResolveFillOptions } from "../../resolve-fill";
 import { hashShapeId, wobbleEllipse, wobbleLine, wobbleOffset, wobbleRect } from "./wobble";
 
 const CRAYON_COLORS = {
@@ -15,7 +16,11 @@ const CRAYON_COLORS = {
   sectionStroke: "#718096",
 } as const;
 
-export type ShapeSvgRenderer = (shape: Shape, box: BoundingBox) => string;
+export type ShapeSvgRenderer = (
+  shape: Shape,
+  box: BoundingBox,
+  options?: ResolveFillOptions,
+) => string;
 
 export const CRAYON_SHAPE_RENDERERS: Readonly<Record<string, ShapeSvgRenderer>> = Object.freeze({
   [SHAPE_KINDS.page]: (shape, box) => {
@@ -28,25 +33,27 @@ export const CRAYON_SHAPE_RENDERERS: Readonly<Record<string, ShapeSvgRenderer>> 
     const d = wobbleRect(box.x, box.y, box.width, box.height, seed, 1.8);
     return `<path d="${d}" fill="${CRAYON_COLORS.sectionFill}" stroke="${CRAYON_COLORS.sectionStroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />`;
   },
-  [SHAPE_KINDS.rect]: (shape, box) => {
+  [SHAPE_KINDS.rect]: (shape, box, options) => {
     const seed = hashShapeId(shape.id);
     const d = wobbleRect(box.x, box.y, box.width, box.height, seed, 2.0);
-    const fill = escapeXml(shape.fill ?? CRAYON_COLORS.fill);
+    const { fill, fillOpacity, defs } = resolveShapeFill(shape, CRAYON_COLORS.fill, options);
     const stroke = escapeXml(shape.stroke ?? CRAYON_COLORS.stroke);
     const strokeWidth = shape.strokeWidth ?? 2;
-    return `<path d="${d}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" />`;
+    const fillOpacityAttr = fillOpacity !== undefined ? ` fill-opacity="${fillOpacity}"` : "";
+    return `${defs ?? ""}<path d="${d}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"${fillOpacityAttr} stroke-linecap="round" stroke-linejoin="round" />`;
   },
-  [SHAPE_KINDS.ellipse]: (shape, box) => {
+  [SHAPE_KINDS.ellipse]: (shape, box, options) => {
     const seed = hashShapeId(shape.id);
     const cx = box.x + box.width / 2;
     const cy = box.y + box.height / 2;
     const rx = box.width / 2;
     const ry = box.height / 2;
     const d = wobbleEllipse(cx, cy, rx, ry, seed, 2.0);
-    const fill = escapeXml(shape.fill ?? CRAYON_COLORS.fill);
+    const { fill, fillOpacity, defs } = resolveShapeFill(shape, CRAYON_COLORS.fill, options);
     const stroke = escapeXml(shape.stroke ?? CRAYON_COLORS.stroke);
     const strokeWidth = shape.strokeWidth ?? 2;
-    return `<path d="${d}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" />`;
+    const fillOpacityAttr = fillOpacity !== undefined ? ` fill-opacity="${fillOpacity}"` : "";
+    return `${defs ?? ""}<path d="${d}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"${fillOpacityAttr} stroke-linecap="round" stroke-linejoin="round" />`;
   },
   [SHAPE_KINDS.line]: (shape, box) => {
     const seed = hashShapeId(shape.id);

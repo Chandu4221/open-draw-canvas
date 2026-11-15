@@ -13,6 +13,8 @@ import {
   SHAPE_KINDS,
   SHAPE_KIND_LABELS,
   SHAPE_KIND_VALUES,
+  FILL_STYLES,
+  FILL_STYLE_VALUES,
   STYLE_PROFILES,
   STYLE_PROFILE_BY_VALUE,
 } from "./index";
@@ -93,5 +95,19 @@ describe("style-profiles", () => {
     expect(STYLE_PROFILES.crayon).toBe("crayon");
     expect(STYLE_PROFILE_BY_VALUE.minimal).toBe("minimal");
     expect(STYLE_PROFILE_BY_VALUE.crayon).toBe("crayon");
+  });
+});
+
+describe("fill-styles", () => {
+  it("exposes closed registry of shape fill styles (R-005, R-007)", () => {
+    expect(FILL_STYLES.none).toBe("none");
+    expect(FILL_STYLES.subtle).toBe("subtle");
+    expect(FILL_STYLES.solid).toBe("solid");
+    expect(FILL_STYLES.hatch).toBe("hatch");
+    expect(FILL_STYLE_VALUES.has("none")).toBe(true);
+    expect(FILL_STYLE_VALUES.has("subtle")).toBe(true);
+    expect(FILL_STYLE_VALUES.has("solid")).toBe(true);
+    expect(FILL_STYLE_VALUES.has("hatch")).toBe(true);
+    expect(FILL_STYLE_VALUES.has("unknown")).toBe(false);
   });
 });
