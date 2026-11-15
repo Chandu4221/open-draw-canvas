@@ -1,4 +1,5 @@
-// Style validation for shapes (fill, stroke, strokeWidth) (R-006, ADR-0006 F1).
+// Style validation for shapes (fill, stroke, strokeWidth, fillStyle) (R-006, ADR-0006 F1).
+import { FILL_STYLE_VALUES, type FillStyle } from "@open-draw/contracts";
 import { DocumentError } from "./errors";
 
 const COLOR_REGEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
@@ -21,4 +22,14 @@ export function parseStrokeWidth(value: unknown): number {
     throw new DocumentError("invalidShape", "strokeWidth must be a non-negative finite number");
   }
   return value;
+}
+
+export function parseFillStyle(value: unknown): FillStyle {
+  if (typeof value !== "string" || !FILL_STYLE_VALUES.has(value)) {
+    throw new DocumentError(
+      "invalidShape",
+      `fillStyle must be one of: ${Array.from(FILL_STYLE_VALUES).join(", ")}`,
+    );
+  }
+  return value as FillStyle;
 }

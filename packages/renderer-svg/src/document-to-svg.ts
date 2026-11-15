@@ -21,10 +21,18 @@ import {
 } from "@open-draw/document";
 import { CRAYON_SHAPE_RENDERERS } from "./styles/crayon";
 import { escapeXml } from "./escape-xml";
+import {
+  CONTENT_FILL_FALLBACK,
+  CONTENT_STROKE_FALLBACK,
+  resolveShapeFill,
+  type ResolvedFill,
+} from "./resolve-fill";
+
+export { resolveShapeFill, type ResolvedFill };
 
 export const RENDER_STYLES = {
-  contentFill: "#ffffff",
-  contentStroke: "#1f2933",
+  contentFill: CONTENT_FILL_FALLBACK,
+  contentStroke: CONTENT_STROKE_FALLBACK,
   pageFill: "none",
   pageStroke: "#8a94a6",
   pageDasharray: "8 6",
@@ -44,7 +52,7 @@ export interface RendererFallbackEvent {
   readonly kind: string;
 }
 
-export type ShapeSvgRenderer = (shape: Shape, box: BoundingBox) => string;
+export type ShapeSvgRenderer = (shape: Shape, box: BoundingBox, options?: RenderOptions) => string;
 
 export interface RenderOptions {
   readonly activeDeviceType?: DeviceType | undefined;
@@ -79,19 +87,21 @@ export const DEFAULT_SHAPE_RENDERERS: Readonly<Record<string, ShapeSvgRenderer>>
     `<rect x="${num(box.x)}" y="${num(box.y)}" width="${num(box.width, 1)}" height="${num(box.height, 1)}" fill="${RENDER_STYLES.pageFill}" stroke="${RENDER_STYLES.pageStroke}" stroke-dasharray="${RENDER_STYLES.pageDasharray}" />`,
   [SHAPE_KINDS.section]: (shape, box) =>
     `<rect x="${num(box.x)}" y="${num(box.y)}" width="${num(box.width, 1)}" height="${num(box.height, 1)}" fill="${RENDER_STYLES.sectionFill}" stroke="${RENDER_STYLES.sectionStroke}" />`,
-  [SHAPE_KINDS.rect]: (shape, box) => {
-    const fill = escapeXml(shape.fill ?? RENDER_STYLES.contentFill);
+  [SHAPE_KINDS.rect]: (shape, box, options) => {
+    const { fill, fillOpacity, defs } = resolveShapeFill(shape, RENDER_STYLES.contentFill, options);
     const stroke = escapeXml(shape.stroke ?? RENDER_STYLES.contentStroke);
     const strokeWidthAttr =
       shape.strokeWidth !== undefined ? ` stroke-width="${num(shape.strokeWidth, 1)}"` : "";
-    return `<rect x="${num(box.x)}" y="${num(box.y)}" width="${num(box.width, 1)}" height="${num(box.height, 1)}" fill="${fill}" stroke="${stroke}"${strokeWidthAttr} />`;
+    const fillOpacityAttr = fillOpacity !== undefined ? ` fill-opacity="${fillOpacity}"` : "";
+    return `${defs ?? ""}<rect x="${num(box.x)}" y="${num(box.y)}" width="${num(box.width, 1)}" height="${num(box.height, 1)}" fill="${fill}" stroke="${stroke}"${strokeWidthAttr}${fillOpacityAttr} />`;
   },
-  [SHAPE_KINDS.ellipse]: (shape, box) => {
-    const fill = escapeXml(shape.fill ?? RENDER_STYLES.contentFill);
+  [SHAPE_KINDS.ellipse]: (shape, box, options) => {
+    const { fill, fillOpacity, defs } = resolveShapeFill(shape, RENDER_STYLES.contentFill, options);
     const stroke = escapeXml(shape.stroke ?? RENDER_STYLES.contentStroke);
     const strokeWidthAttr =
       shape.strokeWidth !== undefined ? ` stroke-width="${num(shape.strokeWidth, 1)}"` : "";
-    return `<ellipse cx="${num(box.x + box.width / 2)}" cy="${num(box.y + box.height / 2)}" rx="${num(box.width / 2, 1)}" ry="${num(box.height / 2, 1)}" fill="${fill}" stroke="${stroke}"${strokeWidthAttr} />`;
+    const fillOpacityAttr = fillOpacity !== undefined ? ` fill-opacity="${fillOpacity}"` : "";
+    return `${defs ?? ""}<ellipse cx="${num(box.x + box.width / 2)}" cy="${num(box.y + box.height / 2)}" rx="${num(box.width / 2, 1)}" ry="${num(box.height / 2, 1)}" fill="${fill}" stroke="${stroke}"${strokeWidthAttr}${fillOpacityAttr} />`;
   },
   [SHAPE_KINDS.line]: (shape, box) => {
     const line = shape as LineShape;
@@ -142,7 +152,7 @@ export function shapeToSvg(shape: Shape, box: BoundingBox, options?: RenderOptio
 
   let rendered: string;
   if (renderer !== undefined) {
-    rendered = renderer(shape, box);
+    rendered = renderer(shape, box, options);
   } else {
     options?.onFallback?.({ shapeId: shape.id, kind: shape.kind });
     rendered = fallbackShapeToSvg(shape, box);

@@ -74,6 +74,7 @@ const RESERVED_CUSTOM_DATA_KEYS = new Set([
   "fill",
   "stroke",
   "strokeWidth",
+  "fillStyle",
 ]);
 
 export function serializeDocument(doc: Document): string {
@@ -114,6 +115,10 @@ export function serializeDocument(doc: Document): string {
 
     if (shape.strokeWidth !== undefined) {
       shapeRecord.strokeWidth = shape.strokeWidth;
+    }
+
+    if (shape.fillStyle !== undefined) {
+      shapeRecord.fillStyle = shape.fillStyle;
     }
 
     if (isCustomShape(shape)) {

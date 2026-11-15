@@ -106,8 +106,9 @@ function parseParentId(value: unknown): ShapeId | typeof ROOT_ID {
   }
 }
 
-export { parseColor, parseStrokeWidth } from "./style-validation";
-import { parseColor, parseStrokeWidth } from "./style-validation";
+export { parseColor, parseStrokeWidth, parseFillStyle } from "./style-validation";
+import { parseColor, parseStrokeWidth, parseFillStyle } from "./style-validation";
+import type { FillStyle } from "@open-draw/contracts";
 
 function parseShape(value: unknown): Shape {
   if (!isRecord(value)) {
@@ -144,6 +145,10 @@ function parseShape(value: unknown): Shape {
   if (value.strokeWidth !== undefined) {
     strokeWidth = parseStrokeWidth(value.strokeWidth);
   }
+  let fillStyle: FillStyle | undefined;
+  if (value.fillStyle !== undefined) {
+    fillStyle = parseFillStyle(value.fillStyle);
+  }
   const isRootShape = isRootId(parentId);
   const meta = parseMeta(value.meta, isRootShape);
   const base = {
@@ -156,6 +161,7 @@ function parseShape(value: unknown): Shape {
     ...(fill === undefined ? {} : { fill }),
     ...(stroke === undefined ? {} : { stroke }),
     ...(strokeWidth === undefined ? {} : { strokeWidth }),
+    ...(fillStyle === undefined ? {} : { fillStyle }),
     meta,
   };
 

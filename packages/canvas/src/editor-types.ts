@@ -2,6 +2,7 @@ import type {
   BoundingBox,
   CustomShapeKind,
   DeviceType,
+  FillStyle,
   PluginId,
   Point,
   ShapeId,
@@ -73,6 +74,7 @@ export interface Editor {
       readonly fill?: string | null | undefined;
       readonly stroke?: string | null | undefined;
       readonly strokeWidth?: number | null | undefined;
+      readonly fillStyle?: FillStyle | null | undefined;
     },
   ): void;
   setShapeOrder(id: ShapeId, deviceType: DeviceType, order: number | null): void;

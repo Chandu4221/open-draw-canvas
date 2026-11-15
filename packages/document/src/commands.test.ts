@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEVICE_TYPES, parseShapeId, STYLE_PROFILES } from "@open-draw/contracts";
+import { DEVICE_TYPES, FILL_STYLES, parseShapeId, STYLE_PROFILES } from "@open-draw/contracts";
 import {
   applyTransaction,
   COMMANDS,
@@ -121,6 +121,51 @@ describe("document commands (milestone 05)", () => {
     expect(undone.document.shapes[rectId]?.fill).toBeUndefined();
     expect(undone.document.shapes[rectId]?.stroke).toBeUndefined();
     expect(undone.document.shapes[rectId]?.strokeWidth).toBeUndefined();
+  });
+
+  it("applies SetShapeStyle with fillStyle and inverts cleanly (R-005, R-016)", () => {
+    const doc = createBaseDoc();
+    const result = applyTransaction(
+      doc,
+      createTransaction([
+        {
+          type: COMMANDS.setShapeStyle,
+          id: rectId,
+          fillStyle: FILL_STYLES.none,
+        },
+      ]),
+    );
+
+    expect(result.document.shapes[rectId]?.fillStyle).toBe(FILL_STYLES.none);
+
+    const undone = applyTransaction(result.document, createTransaction(result.inverse));
+    expect(undone.document.shapes[rectId]?.fillStyle).toBeUndefined();
+
+    // Update to hatch
+    const hatchResult = applyTransaction(
+      doc,
+      createTransaction([
+        {
+          type: COMMANDS.setShapeStyle,
+          id: rectId,
+          fillStyle: FILL_STYLES.hatch,
+        },
+      ]),
+    );
+    expect(hatchResult.document.shapes[rectId]?.fillStyle).toBe(FILL_STYLES.hatch);
+
+    // Clear fillStyle by setting null
+    const clearResult = applyTransaction(
+      hatchResult.document,
+      createTransaction([
+        {
+          type: COMMANDS.setShapeStyle,
+          id: rectId,
+          fillStyle: null,
+        },
+      ]),
+    );
+    expect(clearResult.document.shapes[rectId]?.fillStyle).toBeUndefined();
   });
 
   it("updates and clears shape content with clean inverse (SetShapeContent)", () => {
