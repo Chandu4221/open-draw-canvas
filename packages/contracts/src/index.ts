@@ -9,3 +9,4 @@ export * from "./plugin-contract";
 export * from "./document-limits";
 export * from "./shape-kinds";
 export * from "./style-render-contract";
+export * from "./spatial";
