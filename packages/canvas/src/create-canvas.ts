@@ -18,6 +18,10 @@ import { CONTROLLER_EVENTS, type CanvasEvent, type ControllerEvent } from "./eve
 import type { HandleId } from "./handles";
 import { pickHandle, pickShape, pickShapesInBox, resolveSelectionDrillDown } from "./hit-test";
 import { buildSpatialIndexFromDocument, type SpatialIndex } from "./spatial/spatial-index";
+import {
+  findIncrementalSpatialChanges,
+  updateSpatialIndexFromDocument,
+} from "./spatial/spatial-incremental";
 import { INITIAL_MACHINE_STATE, type MachineState, transition } from "./machine";
 import { DEFAULT_SHAPE_REGISTRATIONS } from "./default-shapes";
 import {
@@ -223,13 +227,29 @@ export function createCanvas(options: CanvasOptions = {}): CanvasController {
   }
 
   function ensureSpatialIndex(doc: Document): SpatialIndex {
-    if (
-      cachedSpatialIndex !== null &&
-      cachedSpatialDoc !== null &&
-      isSpatialEquivalent(cachedSpatialDoc, doc)
-    ) {
-      cachedSpatialDoc = doc;
-      return cachedSpatialIndex;
+    if (cachedSpatialIndex !== null && cachedSpatialDoc !== null) {
+      if (cachedSpatialDoc === doc) {
+        return cachedSpatialIndex;
+      }
+      const incrementalChanges = findIncrementalSpatialChanges(cachedSpatialDoc, doc);
+      if (incrementalChanges !== null) {
+        if (incrementalChanges.length === 0) {
+          cachedSpatialDoc = doc;
+          return cachedSpatialIndex;
+        }
+        cachedSpatialIndex = updateSpatialIndexFromDocument(
+          cachedSpatialIndex,
+          cachedSpatialDoc,
+          doc,
+          incrementalChanges,
+        );
+        cachedSpatialDoc = doc;
+        return cachedSpatialIndex;
+      }
+      if (isSpatialEquivalent(cachedSpatialDoc, doc)) {
+        cachedSpatialDoc = doc;
+        return cachedSpatialIndex;
+      }
     }
     cachedSpatialDoc = doc;
     cachedSpatialIndex = buildSpatialIndexFromDocument(doc);

@@ -57,7 +57,10 @@ export interface PointerBindingContext {
     | undefined;
 }
 
-export function attachPointerListeners(ctx: PointerBindingContext): () => void {
+export function attachPointerListeners(
+  ctx: PointerBindingContext,
+  signal?: AbortSignal,
+): () => void {
   const {
     svg,
     canvas,
@@ -528,17 +531,18 @@ export function attachPointerListeners(ctx: PointerBindingContext): () => void {
     }
   }
 
-  svg.addEventListener("pointerdown", onPointerDown);
-  svg.addEventListener("pointermove", onPointerMove);
-  svg.addEventListener("pointerup", onPointerUp);
-  svg.addEventListener("pointercancel", onPointerCancel);
-  svg.addEventListener("lostpointercapture", onPointerCancel);
-  svg.addEventListener("dblclick", onDoubleClick);
+  const listenerOpts: AddEventListenerOptions | undefined = signal ? { signal } : undefined;
+  svg.addEventListener("pointerdown", onPointerDown, listenerOpts);
+  svg.addEventListener("pointermove", onPointerMove, listenerOpts);
+  svg.addEventListener("pointerup", onPointerUp, listenerOpts);
+  svg.addEventListener("pointercancel", onPointerCancel, listenerOpts);
+  svg.addEventListener("lostpointercapture", onPointerCancel, listenerOpts);
+  svg.addEventListener("dblclick", onDoubleClick, listenerOpts);
   if (typeof window !== "undefined") {
-    window.addEventListener("blur", onBlur);
+    window.addEventListener("blur", onBlur, listenerOpts);
   }
   if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
-    document.addEventListener("visibilitychange", onVisibilityChange);
+    document.addEventListener("visibilitychange", onVisibilityChange, listenerOpts);
   }
 
   return () => {

@@ -101,6 +101,13 @@ export {
 } from "./spatial/spatial-index";
 
 export {
+  DEFAULT_MAX_INCREMENTAL_BATCH,
+  updateSpatialIndexItem,
+  findIncrementalSpatialChanges,
+  updateSpatialIndexFromDocument,
+} from "./spatial/spatial-incremental";
+
+export {
   computeBoxIoa,
   deriveZIndexMetrics,
   deriveRelativeParentGeometry,
