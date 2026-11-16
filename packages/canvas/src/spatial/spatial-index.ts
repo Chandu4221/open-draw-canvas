@@ -71,7 +71,7 @@ export function computeEnclosingSpatialBox(
   return boxes.length === 0 ? { minX: 0, minY: 0, maxX: 0, maxY: 0 } : { minX, minY, maxX, maxY };
 }
 
-function computeEnclosingFromItems(items: readonly SpatialIndexItem[]): SpatialBoundingBox {
+export function computeEnclosingFromItems(items: readonly SpatialIndexItem[]): SpatialBoundingBox {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -88,7 +88,7 @@ function computeEnclosingFromItems(items: readonly SpatialIndexItem[]): SpatialB
   return items.length === 0 ? { minX: 0, minY: 0, maxX: 0, maxY: 0 } : { minX, minY, maxX, maxY };
 }
 
-function computeEnclosingFromNodes(nodes: readonly SpatialNode[]): SpatialBoundingBox {
+export function computeEnclosingFromNodes(nodes: readonly SpatialNode[]): SpatialBoundingBox {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;

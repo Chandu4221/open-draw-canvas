@@ -43,7 +43,10 @@ export interface KeyboardBindingContext {
   readonly nextShapeId: (doc?: Document) => ShapeId;
 }
 
-export function attachKeyboardListeners(ctx: KeyboardBindingContext): () => void {
+export function attachKeyboardListeners(
+  ctx: KeyboardBindingContext,
+  signal?: AbortSignal,
+): () => void {
   const {
     canvas,
     getDoc,
@@ -448,8 +451,9 @@ export function attachKeyboardListeners(ctx: KeyboardBindingContext): () => void
     if (event.code === KEY_CODES.space) setSpacePressed(false);
   }
 
-  window.addEventListener("keydown", onKeyDown);
-  window.addEventListener("keyup", onKeyUp);
+  const listenerOpts: AddEventListenerOptions | undefined = signal ? { signal } : undefined;
+  window.addEventListener("keydown", onKeyDown, listenerOpts);
+  window.addEventListener("keyup", onKeyUp, listenerOpts);
 
   return () => {
     window.removeEventListener("keydown", onKeyDown);

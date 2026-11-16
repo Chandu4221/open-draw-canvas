@@ -13,6 +13,11 @@ import {
   toSpatialBox,
   type SpatialIndexItem,
 } from "./spatial-index";
+import {
+  findIncrementalSpatialChanges,
+  updateSpatialIndexFromDocument,
+  updateSpatialIndexItem,
+} from "./spatial-incremental";
 
 describe("toSpatialBox and bounding utilities", () => {
   it("converts BoundingBox to min/max format correctly", () => {
@@ -155,5 +160,54 @@ describe("buildSpatialIndexFromDocument", () => {
     expect(hits[0]?.id).toBe(rectB);
     expect(hits[1]?.id).toBe(rectA);
     expect(hits[2]?.id).toBe(pageId);
+  });
+});
+
+describe("updateSpatialIndexItem", () => {
+  it("updates item bounding box and preserves its zIndex", () => {
+    const items: SpatialIndexItem[] = [
+      { id: parseShapeId("s1"), box: { x: 0, y: 0, width: 50, height: 50 }, zIndex: 0 },
+      { id: parseShapeId("s2"), box: { x: 60, y: 60, width: 50, height: 50 }, zIndex: 1 },
+    ];
+    const index = createSpatialIndex(items);
+
+    const updated = updateSpatialIndexItem(index, {
+      id: parseShapeId("s1"),
+      box: { x: 100, y: 100, width: 50, height: 50 },
+      zIndex: -1,
+    });
+
+    const oldHits = querySpatialIndexPoint(updated, { x: 25, y: 25 });
+    expect(oldHits).toHaveLength(0);
+
+    const newHits = querySpatialIndexPoint(updated, { x: 125, y: 125 });
+    expect(newHits).toHaveLength(1);
+    expect(newHits[0]?.id).toBe(parseShapeId("s1"));
+    expect(newHits[0]?.zIndex).toBe(0);
+  });
+});
+
+describe("findIncrementalSpatialChanges & updateSpatialIndexFromDocument", () => {
+  it("detects incremental bounding box move and updates document spatial index", () => {
+    const pageId = parseShapeId("p1");
+    const rect1 = parseShapeId("r1");
+    const doc1 = createDocument([
+      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
+      createRect(rect1, { x: 10, y: 10, width: 50, height: 50 }, { parent: pageId }),
+    ]);
+
+    const doc2 = createDocument([
+      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
+      createRect(rect1, { x: 200, y: 200, width: 50, height: 50 }, { parent: pageId }),
+    ]);
+
+    const changes = findIncrementalSpatialChanges(doc1, doc2);
+    expect(changes).toEqual([rect1]);
+
+    const initialIndex = buildSpatialIndexFromDocument(doc1);
+    const updatedIndex = updateSpatialIndexFromDocument(initialIndex, doc1, doc2, changes!);
+
+    expect(querySpatialIndexPoint(updatedIndex, { x: 20, y: 20 })).toHaveLength(1); // hits page only
+    expect(querySpatialIndexPoint(updatedIndex, { x: 210, y: 210 })[0]?.id).toBe(rect1);
   });
 });

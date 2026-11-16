@@ -1,7 +1,7 @@
 /// @open-draw/canvas — public SDK contract surface (R-004, R-010, R-036, ADR-0008).
 /// Pure interaction core and batteries-included visual canvas controller.
 
-export const CANVAS_VERSION = "0.9.3" as const;
+export const CANVAS_VERSION = "0.9.4" as const;
 
 export {
   type Camera,
@@ -100,6 +100,22 @@ export {
   buildSpatialIndexFromDocument,
 } from "./spatial/spatial-index";
 
+export {
+  DEFAULT_MAX_INCREMENTAL_BATCH,
+  updateSpatialIndexItem,
+  findIncrementalSpatialChanges,
+  updateSpatialIndexFromDocument,
+} from "./spatial/spatial-incremental";
+
+export {
+  computeBoxIoa,
+  deriveZIndexMetrics,
+  deriveRelativeParentGeometry,
+  deriveSpatialRelationships,
+  deriveDocumentSpatialMap,
+  type DocumentSpatialEntry,
+} from "./spatial/spatial-relationships";
+
 export { INITIAL_MACHINE_STATE, type MachineState, transition } from "./machine";
 
 export {
@@ -184,6 +200,13 @@ export {
   type PluginId,
   isValidPluginId,
   parsePluginId,
+  type SpatialAlignments,
+  type SpatialRelationships,
+  type ZIndexMetrics,
+  type RelativeParentGeometry,
+  type SpatialScope,
+  SPATIAL_SCOPES,
+  type SpatialExtractionOptions,
 } from "@open-draw/contracts";
 
 // Re-exported document operations (ADR-0008 D1)

@@ -65,9 +65,23 @@ class MockDomNode {
     return { left: 0, top: 0, width: 800, height: 600 };
   }
 
-  addEventListener(event: string, fn: (...args: unknown[]) => void): void {
+  addEventListener(
+    event: string,
+    fn: (...args: unknown[]) => void,
+    options?: boolean | AddEventListenerOptions,
+  ): void {
     this.listeners[event] = this.listeners[event] ?? [];
     this.listeners[event]!.push(fn);
+    if (typeof options === "object" && options !== null && options.signal) {
+      const sig = options.signal;
+      if (sig.aborted) {
+        this.removeEventListener(event, fn);
+      } else {
+        sig.addEventListener("abort", () => {
+          this.removeEventListener(event, fn);
+        });
+      }
+    }
   }
 
   removeEventListener(event: string, fn: (...args: unknown[]) => void): void {
@@ -116,9 +130,23 @@ describe("createEditor", () => {
 
     const windowListeners: Record<string, ((event: unknown) => void)[]> = {};
     const mockWin = {
-      addEventListener: (evt: string, fn: (event: unknown) => void) => {
+      addEventListener: (
+        evt: string,
+        fn: (event: unknown) => void,
+        opts?: boolean | AddEventListenerOptions,
+      ) => {
         windowListeners[evt] = windowListeners[evt] ?? [];
         windowListeners[evt]!.push(fn);
+        if (typeof opts === "object" && opts !== null && opts.signal) {
+          const sig = opts.signal;
+          if (sig.aborted) {
+            mockWin.removeEventListener(evt, fn);
+          } else {
+            sig.addEventListener("abort", () => {
+              mockWin.removeEventListener(evt, fn);
+            });
+          }
+        }
       },
       removeEventListener: (evt: string, fn: (event: unknown) => void) => {
         if (windowListeners[evt]) {
@@ -243,6 +271,18 @@ describe("createEditor", () => {
 
     editor.destroy();
     expect(container.contains(editor.svg as unknown as MockDomNode)).toBe(false);
+    editor = null;
+  });
+
+  it("aborts all event listeners atomically via AbortController signal on destroy", () => {
+    editor = createEditor(container as unknown as HTMLElement);
+    const mockSvg = editor.svg as unknown as MockDomNode;
+    expect(mockSvg.listeners["pointerdown"]?.length).toBeGreaterThan(0);
+    expect(mockSvg.listeners["wheel"]?.length).toBeGreaterThan(0);
+
+    editor.destroy();
+    expect(mockSvg.listeners["pointerdown"] ?? []).toHaveLength(0);
+    expect(mockSvg.listeners["wheel"] ?? []).toHaveLength(0);
     editor = null;
   });
 

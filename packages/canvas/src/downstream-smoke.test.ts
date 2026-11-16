@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import packageJson from "../package.json" with { type: "json" };
 
-// Import directly from the built distribution artifacts to verify the bundle is self-contained.
+// Verify consumer API surface and integration
 import {
   CANVAS_VERSION,
   COMMANDS,
@@ -105,6 +105,9 @@ describe("Downstream Package Packaging & Surface (ADR-0008, R-002, R-004)", () =
   });
 
   it("exports package entry points pointing to built dist artifacts (ADR-0008 D5)", () => {
+    expect(packageJson.main).toBe("./dist/index.cjs");
+    expect(packageJson.module).toBe("./dist/index.js");
+    expect(packageJson.types).toBe("./dist/index.d.ts");
     expect(packageJson.publishConfig.main).toBe("./dist/index.cjs");
     expect(packageJson.publishConfig.module).toBe("./dist/index.js");
     expect(packageJson.publishConfig.types).toBe("./dist/index.d.ts");

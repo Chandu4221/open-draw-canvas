@@ -5,7 +5,20 @@ All notable changes to the `@open-draw/canvas` package are documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.4] - 2026-11-16
+
+### Added
+
+- **Spatial Relationships & Alignments (R-008, R-016, ADR-0010)**: Pure functions `deriveSpatialRelationships` and `deriveDocumentSpatialMap` calculating directional positioning (`leftOf`, `rightOf`, `above`, `below`), edge and centerline alignments within tolerance (`aligns: { left, right, top, bottom, centerX, centerY }`), and frame-breaking overlay detection (`overlaps`).
+- **Relative Parent Geometry (ADR-0002 D4)**: `deriveRelativeParentGeometry` computing exact parent-relative coordinate ratios (`widthRatio`, `heightRatio`, `xRatio`, `yRatio`).
+- **Z-Index Metrics (ADR-0002 D1, D6)**: `deriveZIndexMetrics` deriving `siblingIndex`, hierarchy `depth`, and `frontToBack` pre-order traversal sequence without mutating document state.
+- **Intersection over Area (IoA)**: Pure `computeBoxIoa` utility for spatial overlap thresholding.
+
+### Fixed
+
+- **Export Configuration Packaging (ADR-0008, R-002)**: Pointed root `package.json` entry points (`main`, `module`, `types`) directly to built `./dist/*` artifacts and aligned `publishConfig` to prevent runtime module resolution divergence in strict Node ESM and bundler environments.
+- **Event Listener Teardown via AbortController (R-008, R-018)**: Consolidated all editor listeners (`wheel`, `pointer*`, `keydown`, `keyup`, `blur`, `visibilitychange`) to accept an atomic `AbortSignal`, ensuring zero listener leaks on `editor.destroy()`.
+- **Incremental Spatial Index Updates (ADR-0011, R-016)**: Added `findIncrementalSpatialChanges`, `updateSpatialIndexItem`, and `updateSpatialIndexFromDocument` to update leaf nodes and recompute ancestor bounding boxes in $O(\log N)$ time, avoiding full $O(N \log N)$ STR tree rebuilds during interactive drag and resize operations.
 
 ## [0.9.3] - 2026-11-15
 

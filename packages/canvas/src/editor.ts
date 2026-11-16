@@ -89,6 +89,8 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
   let lastWorld: Point = { x: 0, y: 0 };
   let spacePressed = false;
   let isDestroyed = false;
+  const abortController = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const abortSignal = abortController?.signal;
 
   const customShapeRegistry: Record<string, CustomShapeExtension> = Object.create(null);
   const activeCustomRenderers: Record<string, ShapeSvgRenderer> = {
@@ -351,75 +353,84 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     }
   }
 
-  svg.addEventListener("wheel", onWheel, { passive: false });
+  const wheelOpts: AddEventListenerOptions = abortSignal
+    ? { passive: false, signal: abortSignal }
+    : { passive: false };
+  svg.addEventListener("wheel", onWheel, wheelOpts);
 
   function updateCursor(): void {
     svg.style.cursor = resolveToolCursor(activeTool, spacePressed);
   }
 
-  const detachPointer = attachPointerListeners({
-    svg,
-    canvas,
-    getDoc: () => doc,
-    getTool: () => activeTool,
-    setTool: (t) => {
-      activeTool = t;
-      canvas.emit(CONTROLLER_EVENTS.toolChanged);
-      updateCursor();
-      renderOverlays();
+  const detachPointer = attachPointerListeners(
+    {
+      svg,
+      canvas,
+      getDoc: () => doc,
+      getTool: () => activeTool,
+      setTool: (t) => {
+        activeTool = t;
+        canvas.emit(CONTROLLER_EVENTS.toolChanged);
+        updateCursor();
+        renderOverlays();
+      },
+      getSpacePressed: () => spacePressed,
+      execute: (cmds) => execute(cmds),
+      render: () => renderOverlays(),
+      renderDocument: (force) => renderDocument(force),
+      getGesture: () => gesture,
+      setGesture: (g) => {
+        gesture = g;
+      },
+      setLastWorld: (p) => {
+        lastWorld = p;
+      },
+      nestingMode: options.nestingMode ?? "containers-only",
+      nextShapeId: idSequence.nextShapeId,
+      interceptPointerDown: options.interceptPointerDown,
+      onDoubleClick: (hitId) => {
+        options.onDoubleClick?.(hitId);
+      },
+      snapConfig: options.snapping,
     },
-    getSpacePressed: () => spacePressed,
-    execute: (cmds) => execute(cmds),
-    render: () => renderOverlays(),
-    renderDocument: (force) => renderDocument(force),
-    getGesture: () => gesture,
-    setGesture: (g) => {
-      gesture = g;
-    },
-    setLastWorld: (p) => {
-      lastWorld = p;
-    },
-    nestingMode: options.nestingMode ?? "containers-only",
-    nextShapeId: idSequence.nextShapeId,
-    interceptPointerDown: options.interceptPointerDown,
-    onDoubleClick: (hitId) => {
-      options.onDoubleClick?.(hitId);
-    },
-    snapConfig: options.snapping,
-  });
+    abortSignal,
+  );
 
-  const detachKeyboard = attachKeyboardListeners({
-    canvas,
-    container,
-    svg,
-    getDoc: () => doc,
-    setDoc: (nextDoc) => {
-      doc = nextDoc;
-      reconcileSelection();
-      renderDocument();
-      renderOverlays();
+  const detachKeyboard = attachKeyboardListeners(
+    {
+      canvas,
+      container,
+      svg,
+      getDoc: () => doc,
+      setDoc: (nextDoc) => {
+        doc = nextDoc;
+        reconcileSelection();
+        renderDocument();
+        renderOverlays();
+      },
+      getHistory: () => history,
+      setHistory: (nextHistory) => {
+        history = nextHistory;
+      },
+      setTool: (t) => {
+        activeTool = t;
+        canvas.emit(CONTROLLER_EVENTS.toolChanged);
+        updateCursor();
+        renderOverlays();
+      },
+      setSpacePressed: (pressed) => {
+        spacePressed = pressed;
+        updateCursor();
+      },
+      resetGesture: () => {
+        gesture = null;
+      },
+      execute: (cmds) => execute(cmds),
+      render: () => renderOverlays(),
+      nextShapeId: idSequence.nextShapeId,
     },
-    getHistory: () => history,
-    setHistory: (nextHistory) => {
-      history = nextHistory;
-    },
-    setTool: (t) => {
-      activeTool = t;
-      canvas.emit(CONTROLLER_EVENTS.toolChanged);
-      updateCursor();
-      renderOverlays();
-    },
-    setSpacePressed: (pressed) => {
-      spacePressed = pressed;
-      updateCursor();
-    },
-    resetGesture: () => {
-      gesture = null;
-    },
-    execute: (cmds) => execute(cmds),
-    render: () => renderOverlays(),
-    nextShapeId: idSequence.nextShapeId,
-  });
+    abortSignal,
+  );
 
   const unsubCamera = canvas.subscribe(CONTROLLER_EVENTS.cameraChanged, () => {
     updateCameraTransform();
@@ -602,6 +613,9 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     render,
     destroy: () => {
       isDestroyed = true;
+      if (abortController !== null) {
+        abortController.abort();
+      }
       detachPointer();
       detachKeyboard();
       unsubCamera();

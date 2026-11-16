@@ -15,6 +15,7 @@ import {
   SHAPE_KIND_VALUES,
   FILL_STYLES,
   FILL_STYLE_VALUES,
+  SPATIAL_SCOPES,
   STYLE_PROFILES,
   STYLE_PROFILE_BY_VALUE,
 } from "./index";
@@ -109,5 +110,12 @@ describe("fill-styles", () => {
     expect(FILL_STYLE_VALUES.has("solid")).toBe(true);
     expect(FILL_STYLE_VALUES.has("hatch")).toBe(true);
     expect(FILL_STYLE_VALUES.has("unknown")).toBe(false);
+  });
+});
+
+describe("spatial-contracts", () => {
+  it("exposes closed registry of spatial scopes (R-005, R-007)", () => {
+    expect(SPATIAL_SCOPES.siblings).toBe("siblings");
+    expect(SPATIAL_SCOPES.all).toBe("all");
   });
 });
