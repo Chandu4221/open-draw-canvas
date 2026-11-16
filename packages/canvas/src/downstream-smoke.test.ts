@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import packageJson from "../package.json" with { type: "json" };
 
-// Import directly from the built distribution artifacts to verify the bundle is self-contained.
+// Verify consumer API surface and integration
 import {
   CANVAS_VERSION,
   COMMANDS,
@@ -14,7 +14,7 @@ import {
   ROOT_ID,
   serializeDocument,
   type Shape,
-} from "../dist/index.js";
+} from "./index";
 
 class MockDomNode {
   tagName: string;
