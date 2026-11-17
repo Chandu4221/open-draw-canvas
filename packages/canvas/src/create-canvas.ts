@@ -63,8 +63,8 @@ export interface CanvasController {
   getSelection(): Selection;
   getSelectedId(): ShapeId | null;
   getSelectedIds(): readonly ShapeId[];
-  select(id: ShapeId): void;
-  selectMany(ids: readonly ShapeId[]): void;
+  select(id: ShapeId, doc?: Document): void;
+  selectMany(ids: readonly ShapeId[], doc?: Document): void;
   toggleSelection(id: ShapeId): void;
   clearSelection(): void;
   isSelected(id: ShapeId): boolean;
@@ -281,12 +281,16 @@ export function createCanvas(options: CanvasOptions = {}): CanvasController {
     getSelection: () => selection,
     getSelectedId: () => singleSelected(selection),
     getSelectedIds: () => selectedIds(selection),
-    select: (id) => {
+    select: (id, doc) => {
+      if (doc !== undefined && doc.shapes[id] === undefined) {
+        return;
+      }
       selection = selectOne(id);
       emit(CONTROLLER_EVENTS.selectionChanged);
     },
-    selectMany: (ids) => {
-      selection = selectMany(ids);
+    selectMany: (ids, doc) => {
+      const filtered = doc !== undefined ? ids.filter((id) => doc.shapes[id] !== undefined) : ids;
+      selection = selectMany(filtered);
       emit(CONTROLLER_EVENTS.selectionChanged);
     },
     toggleSelection: (id) => {

@@ -620,13 +620,10 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
 
     getSelection: () => canvas.getSelectedIds(),
     select: (id) => {
-      if (doc.shapes[id] !== undefined) {
-        canvas.select(id);
-      }
+      canvas.select(id, doc);
     },
     selectMany: (ids) => {
-      const surviving = ids.filter((id) => doc.shapes[id] !== undefined);
-      canvas.selectMany(surviving);
+      canvas.selectMany(ids, doc);
     },
     reconcileSelection: () => reconcileSelection(),
     clearSelection: () => canvas.clearSelection(),

@@ -30,6 +30,29 @@ describe("createCanvas", () => {
     expect(canvas.getSelectedId()).toBeNull();
   });
 
+  it("guards selection when document is passed to select and selectMany", () => {
+    const canvas = createCanvas();
+    const id1 = parseShapeId("shape-1");
+    const idMissing = parseShapeId("non-existent");
+    const shape1 = createRect(id1, { x: 0, y: 0, width: 50, height: 50 });
+    const doc = createDocument([shape1]);
+
+    // Initial valid selection
+    canvas.select(id1, doc);
+    expect(canvas.getSelectedId()).toBe(id1);
+
+    // Attempting to select non-existent shape preserves existing selection
+    canvas.select(idMissing, doc);
+    expect(canvas.getSelectedId()).toBe(id1);
+
+    // selectMany filters out non-existent shapes
+    canvas.selectMany([idMissing], doc);
+    expect(canvas.getSelectedIds()).toEqual([]);
+
+    canvas.selectMany([id1, idMissing], doc);
+    expect(canvas.getSelectedIds()).toEqual([id1]);
+  });
+
   it("supports multi-selection with selectMany and toggleSelection (F3, ADR-0006 Option A)", () => {
     const canvas = createCanvas();
     const id1 = parseShapeId("shape-1");

@@ -20,9 +20,15 @@ import {
 
 export const DEFAULT_MAX_INCREMENTAL_BATCH = 64;
 
+export interface SpatialIndexUpdateItem {
+  readonly id: ShapeId;
+  readonly box: BoundingBox;
+  readonly zIndex?: number | undefined;
+}
+
 function updateNodeItem(
   node: SpatialNode,
-  updatedItem: SpatialIndexItem,
+  updatedItem: SpatialIndexUpdateItem,
   prevSpatialBox?: SpatialBoundingBox,
 ): { readonly node: SpatialNode; readonly updated: boolean } {
   if (node.isLeaf) {
@@ -43,7 +49,10 @@ function updateNodeItem(
     nextItems[foundIndex] = {
       id: updatedItem.id,
       box: updatedItem.box,
-      zIndex: updatedItem.zIndex >= 0 ? updatedItem.zIndex : existing.zIndex,
+      zIndex:
+        updatedItem.zIndex !== undefined && updatedItem.zIndex >= 0
+          ? updatedItem.zIndex
+          : existing.zIndex,
     };
     const nextBox = computeEnclosingFromItems(nextItems);
     return {
@@ -139,7 +148,7 @@ function updateNodeItem(
  */
 export function updateSpatialIndexItem(
   index: SpatialIndex,
-  updatedItem: SpatialIndexItem,
+  updatedItem: SpatialIndexItem | SpatialIndexUpdateItem,
   previousBox?: BoundingBox,
 ): SpatialIndex | null {
   if (index.root === null) return null;
@@ -167,6 +176,8 @@ export function findIncrementalSpatialChanges(
   const prevKeys = Object.keys(prevShapes);
   const nextKeys = Object.keys(nextShapes);
   if (prevKeys.length !== nextKeys.length) return null;
+  // Sibling stacking order is derived from map insertion order (ADR-0002 D6).
+  // Any key order divergence represents a z-order permutation requiring full rebuild.
   for (let i = 0; i < prevKeys.length; i += 1) {
     if (prevKeys[i] !== nextKeys[i]) return null;
   }
@@ -240,7 +251,6 @@ export function updateSpatialIndexFromDocument(
       {
         id,
         box: nextAbsBox,
-        zIndex: -1,
       },
       prevAbsBox,
     );
