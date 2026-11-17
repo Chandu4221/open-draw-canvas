@@ -5,6 +5,8 @@
 import type { BoundingBox, CustomShapeKind, Point, ShapeId, ShapeKind } from "@open-draw/contracts";
 import {
   MAX_COORDINATE_BOUND,
+  MAX_DOCUMENT_SHAPE_COUNT,
+  MAX_PEN_PATH_POINTS,
   ROOT_ID,
   SHAPE_KINDS,
   SHAPE_KIND_VALUES,
@@ -179,6 +181,12 @@ function parseShape(value: unknown): Shape {
     if (!Array.isArray(value.points)) {
       throw new DocumentError("invalidShape", "pen-path points must be an array");
     }
+    if (value.points.length > MAX_PEN_PATH_POINTS) {
+      throw new DocumentError(
+        "invalidShape",
+        `pen-path points count (${value.points.length}) exceeds maximum allowed points (${MAX_PEN_PATH_POINTS})`,
+      );
+    }
     const points = value.points.map((pt, i) => parsePoint(pt, `pen-path point[${i}]`));
     return { ...base, kind, points } as Shape;
   }
@@ -217,8 +225,16 @@ export function parseDocument(input: unknown): Document {
   // Pre-validate document depth before expensive per-shape parsing (Ruling V1, R-006)
   validateDocumentDepth(input.shapes);
 
+  const shapeEntries = Object.entries(input.shapes);
+  if (shapeEntries.length > MAX_DOCUMENT_SHAPE_COUNT) {
+    throw new DocumentError(
+      "documentShapeCountExceeded",
+      `shape count (${shapeEntries.length}) exceeds maximum allowed shapes (${MAX_DOCUMENT_SHAPE_COUNT})`,
+    );
+  }
+
   const shapes: Shape[] = [];
-  for (const [key, entry] of Object.entries(input.shapes)) {
+  for (const [key, entry] of shapeEntries) {
     const shape = parseShape(entry);
     if (shape.id !== key) {
       throw new DocumentError("invalidShape", `record key must match shape id: ${key}`);

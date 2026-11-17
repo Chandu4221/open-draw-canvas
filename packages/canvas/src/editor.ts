@@ -19,6 +19,7 @@ import {
   parseDocument,
   recordHistory,
   redo,
+  REORDER_OPERATIONS,
   serializeDocument,
   undo,
   type Command,
@@ -75,12 +76,16 @@ function isGeometryMutationCommand(cmd: Command): boolean {
     cmd.type === COMMANDS.reparentShape ||
     cmd.type === COMMANDS.moveShapes ||
     cmd.type === COMMANDS.setShapeBoundingBox ||
-    cmd.type === COMMANDS.duplicateShapes
+    cmd.type === COMMANDS.duplicateShapes ||
+    cmd.type === COMMANDS.reorderShapes
   );
 }
 
 export function createEditor(container: HTMLElement, options: EditorOptions = {}): Editor {
-  const canvas = createCanvas(options.canvasOptions);
+  const canvas = createCanvas({
+    ...options.canvasOptions,
+    ...(options.instanceId !== undefined ? { instanceId: options.instanceId } : {}),
+  });
   let doc = options.document ?? createDocument([]);
   const idSequence = createShapeIdGenerator(doc);
   let history: HistoryState = EMPTY_HISTORY;
@@ -226,6 +231,7 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
       activeDeviceType: canvas.getActiveDeviceType(),
       activeDeviceTypes: canvas.getActiveDeviceTypes(),
       customRenderers: activeCustomRenderers,
+      instanceId: options.instanceId ?? canvas.getInstanceId(),
       visibleShapeIds,
       wrapShapeId: true,
       onFallback: (evt: { shapeId: ShapeId; kind: string }) => {
@@ -528,6 +534,7 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
         activeDeviceType: canvas.getActiveDeviceType(),
         activeDeviceTypes: canvas.getActiveDeviceTypes(),
         customRenderers: activeCustomRenderers,
+        instanceId: options.instanceId ?? canvas.getInstanceId(),
       }),
     setTextContent: (id: ShapeId, content: string | null) => {
       execute([{ type: COMMANDS.setShapeContent, id, content }]);
@@ -540,6 +547,54 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     },
     setShapePluginData: (id: ShapeId, pluginId: PluginId, data: unknown | null) => {
       execute([{ type: COMMANDS.setShapePluginData, id, pluginId, data }]);
+    },
+    bringToFront: (ids?: readonly ShapeId[]) => {
+      const targetIds = ids ?? canvas.getSelectedIds();
+      if (targetIds.length > 0) {
+        execute([
+          {
+            type: COMMANDS.reorderShapes,
+            ids: targetIds,
+            operation: REORDER_OPERATIONS.bringToFront,
+          },
+        ]);
+      }
+    },
+    sendToBack: (ids?: readonly ShapeId[]) => {
+      const targetIds = ids ?? canvas.getSelectedIds();
+      if (targetIds.length > 0) {
+        execute([
+          {
+            type: COMMANDS.reorderShapes,
+            ids: targetIds,
+            operation: REORDER_OPERATIONS.sendToBack,
+          },
+        ]);
+      }
+    },
+    bringForward: (ids?: readonly ShapeId[]) => {
+      const targetIds = ids ?? canvas.getSelectedIds();
+      if (targetIds.length > 0) {
+        execute([
+          {
+            type: COMMANDS.reorderShapes,
+            ids: targetIds,
+            operation: REORDER_OPERATIONS.bringForward,
+          },
+        ]);
+      }
+    },
+    sendBackward: (ids?: readonly ShapeId[]) => {
+      const targetIds = ids ?? canvas.getSelectedIds();
+      if (targetIds.length > 0) {
+        execute([
+          {
+            type: COMMANDS.reorderShapes,
+            ids: targetIds,
+            operation: REORDER_OPERATIONS.sendBackward,
+          },
+        ]);
+      }
     },
     execute,
     undo: () => applyHistory(undo(doc, history)),

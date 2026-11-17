@@ -1,5 +1,11 @@
-import type { BoundingBox, Point, ShapeId } from "@open-draw/contracts";
-import { absoluteBoundingBox, type Command, type Document } from "@open-draw/document";
+import { type BoundingBox, CAPABILITIES, type Point, type ShapeId } from "@open-draw/contracts";
+import {
+  absoluteBoundingBox,
+  buildChildIndex,
+  type ChildIndex,
+  type Command,
+  type Document,
+} from "@open-draw/document";
 import type { CanvasController } from "./create-canvas";
 import { CANVAS_EVENTS } from "./events";
 import { GESTURE_KINDS, type GestureKind } from "./gestures";
@@ -81,6 +87,7 @@ export function attachPointerListeners(
   let hasPassedDragThreshold = false;
   let cachedRect: DOMRect | { left: number; top: number; width: number; height: number } | null =
     null;
+  let cachedChildIndex: ChildIndex | null = null;
   let touchTracker = createTouchTracker();
 
   function screenPoint(event: MouseEvent | PointerEvent | WheelEvent): Point {
@@ -98,6 +105,7 @@ export function attachPointerListeners(
     }
     cachedRect = svg.getBoundingClientRect();
     const doc = getDoc();
+    cachedChildIndex = buildChildIndex(doc);
     const tool = getTool();
     const screen = screenPoint(event);
     const world = canvas.screenToWorld(screen);
@@ -141,21 +149,31 @@ export function attachPointerListeners(
     let originalBox: BoundingBox | null = null;
     if (selectedIds.length === 1) {
       const shape = doc.shapes[selectedIds[0]!];
-      if (shape !== undefined && shape.kind !== "page") {
+      if (
+        shape !== undefined &&
+        shape.kind !== "page" &&
+        canvas.hasCapability(shape.kind, CAPABILITIES.resizable)
+      ) {
         originalBox = absoluteBoundingBox(doc, shape);
         handle = canvas.pickHandle(originalBox, screen);
       }
     } else if (selectedIds.length > 1) {
-      const boxes: BoundingBox[] = [];
-      for (const id of selectedIds) {
+      const allResizable = selectedIds.every((id) => {
         const s = doc.shapes[id];
-        if (s !== undefined && s.kind !== "page") {
-          boxes.push(absoluteBoundingBox(doc, s));
+        return s !== undefined && canvas.hasCapability(s.kind, CAPABILITIES.resizable);
+      });
+      if (allResizable) {
+        const boxes: BoundingBox[] = [];
+        for (const id of selectedIds) {
+          const s = doc.shapes[id];
+          if (s !== undefined && s.kind !== "page") {
+            boxes.push(absoluteBoundingBox(doc, s));
+          }
         }
-      }
-      originalBox = unionBoxes(boxes);
-      if (originalBox !== null) {
-        handle = canvas.pickHandle(originalBox, screen);
+        originalBox = unionBoxes(boxes);
+        if (originalBox !== null) {
+          handle = canvas.pickHandle(originalBox, screen);
+        }
       }
     }
 
@@ -196,7 +214,7 @@ export function attachPointerListeners(
     }
 
     const state = canvas.getMachineState();
-    const kind: GestureKind =
+    let kind: GestureKind =
       state.stateId === STATES.panning
         ? GESTURE_KINDS.pan
         : state.stateId === STATES.drawingShape
@@ -211,9 +229,16 @@ export function attachPointerListeners(
 
     let shapeIds: readonly ShapeId[] = [];
     if (state.stateId === STATES.pointingShape && state.activeShapeId !== null) {
-      shapeIds = canvas.isSelected(state.activeShapeId)
+      const candidateIds = canvas.isSelected(state.activeShapeId)
         ? canvas.getSelectedIds()
         : [state.activeShapeId];
+      shapeIds = candidateIds.filter((id) => {
+        const s = doc.shapes[id];
+        return s !== undefined && canvas.hasCapability(s.kind, CAPABILITIES.movable);
+      });
+      if (shapeIds.length === 0) {
+        kind = GESTURE_KINDS.press;
+      }
     } else if (state.stateId === STATES.pointingHandle) {
       shapeIds = selectedIds;
     }
@@ -347,6 +372,7 @@ export function attachPointerListeners(
         zoom: canvas.getCamera().zoom,
         thresholdPx,
         activeDeviceType: canvas.getActiveDeviceType(),
+        childIndex: cachedChildIndex ?? undefined,
       });
       effectiveWorld = snapRes.snappedWorld;
       snapGuides = snapRes.guides;
@@ -384,6 +410,7 @@ export function attachPointerListeners(
       setGesture(null);
       hasPassedDragThreshold = false;
       cachedRect = null;
+      cachedChildIndex = null;
       svg.style.cursor = resolveToolCursor(getTool(), getSpacePressed());
       render();
       return;
@@ -406,7 +433,9 @@ export function attachPointerListeners(
 
     if (hasPassedDragThreshold) {
       if (before === STATES.draggingShape && gesture.shapeIds.length > 0) {
-        commitDragGesture(doc, gesture, commitWorld, execute, ctx.nestingMode);
+        commitDragGesture(doc, gesture, commitWorld, execute, ctx.nestingMode, (kind) =>
+          canvas.hasCapability(kind, CAPABILITIES.container),
+        );
       } else if (before === STATES.resizingShape) {
         commitResizeGesture(doc, canvas, gesture, commitWorld, execute);
       } else if (before === STATES.drawingShape) {
@@ -455,6 +484,7 @@ export function attachPointerListeners(
     setGesture(null);
     hasPassedDragThreshold = false;
     cachedRect = null;
+    cachedChildIndex = null;
     svg.style.cursor = resolveToolCursor(tool, getSpacePressed());
     render();
   }
@@ -476,6 +506,7 @@ export function attachPointerListeners(
         setGesture(null);
         hasPassedDragThreshold = false;
         cachedRect = null;
+        cachedChildIndex = null;
         svg.style.cursor = resolveToolCursor(getTool(), getSpacePressed());
         ctx.renderDocument?.(true);
         render();
@@ -493,6 +524,7 @@ export function attachPointerListeners(
       setGesture(null);
       hasPassedDragThreshold = false;
       cachedRect = null;
+      cachedChildIndex = null;
       svg.style.cursor = resolveToolCursor(getTool(), getSpacePressed());
       ctx.renderDocument?.(true);
       render();
@@ -504,6 +536,7 @@ export function attachPointerListeners(
       setGesture(null);
       hasPassedDragThreshold = false;
       cachedRect = null;
+      cachedChildIndex = null;
       svg.style.cursor = resolveToolCursor(getTool(), getSpacePressed());
       render();
     }

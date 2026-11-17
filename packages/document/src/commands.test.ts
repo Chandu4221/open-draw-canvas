@@ -306,4 +306,116 @@ describe("document commands (milestone 05)", () => {
       ),
     ).toThrow(DocumentError);
   });
+
+  describe("bounds clamping and save/load integrity (P0-1)", () => {
+    it("clamps MoveShapes so coordinates never exceed MAX_COORDINATE_BOUND", () => {
+      const doc = createDocument([
+        createPage(pageId, { x: 0, y: 0, width: 1000, height: 1000 }),
+        createRect(rectId, { x: 99_950, y: 99_950, width: 100, height: 100 }, { parent: pageId }),
+      ]);
+      const result = applyTransaction(
+        doc,
+        createTransaction([
+          {
+            type: COMMANDS.moveShapes,
+            ids: [rectId],
+            dx: 500,
+            dy: 500,
+          },
+        ]),
+      );
+      const movedShape = result.document.shapes[rectId]!;
+      expect(movedShape.boundingBox.x).toBeLessThanOrEqual(100_000);
+      expect(movedShape.boundingBox.y).toBeLessThanOrEqual(100_000);
+    });
+
+    it("clamps SetShapeBoundingBox so dimensions and coordinates never exceed MAX_COORDINATE_BOUND", () => {
+      const doc = createDocument([
+        createPage(pageId, { x: 0, y: 0, width: 1000, height: 1000 }),
+        createRect(rectId, { x: 10, y: 10, width: 100, height: 100 }, { parent: pageId }),
+      ]);
+      const result = applyTransaction(
+        doc,
+        createTransaction([
+          {
+            type: COMMANDS.setShapeBoundingBox,
+            id: rectId,
+            boundingBox: { x: 150_000, y: 150_000, width: 200_000, height: 200_000 },
+          },
+        ]),
+      );
+      const resizedShape = result.document.shapes[rectId]!;
+      expect(resizedShape.boundingBox.x).toBeLessThanOrEqual(100_000);
+      expect(resizedShape.boundingBox.y).toBeLessThanOrEqual(100_000);
+      expect(resizedShape.boundingBox.width).toBeLessThanOrEqual(100_000);
+      expect(resizedShape.boundingBox.height).toBeLessThanOrEqual(100_000);
+    });
+  });
+
+  describe("lossless undo inverses for point shapes (P0-2)", () => {
+    it("restores exact line start and end points without floating point drift or collapse", () => {
+      const lineId = parseShapeId("line-1");
+      const line = {
+        id: lineId,
+        kind: "line" as const,
+        parentId: pageId,
+        boundingBox: { x: 10, y: 10, width: 100, height: 100 },
+        start: { x: 10.333333, y: 20.666667 },
+        end: { x: 90.123456, y: 80.654321 },
+        meta: { order: {} },
+      };
+      const doc = createDocument([
+        createPage(pageId, { x: 0, y: 0, width: 1000, height: 1000 }),
+        line,
+      ]);
+      const resized = applyTransaction(
+        doc,
+        createTransaction([
+          {
+            type: COMMANDS.setShapeBoundingBox,
+            id: lineId,
+            boundingBox: { x: 20, y: 20, width: 300, height: 250 },
+          },
+        ]),
+      );
+      const undone = applyTransaction(resized.document, createTransaction(resized.inverse));
+      const restoredLine = undone.document.shapes[lineId] as typeof line;
+      expect(restoredLine.start).toEqual(line.start);
+      expect(restoredLine.end).toEqual(line.end);
+    });
+
+    it("restores exact pen path points on undo without degenerate collapse", () => {
+      const penId = parseShapeId("pen-1");
+      const originalPoints = [
+        { x: 0, y: 0 },
+        { x: 25.12345, y: 50.6789 },
+        { x: 100, y: 100 },
+      ];
+      const penShape = {
+        id: penId,
+        kind: "pen-path" as const,
+        parentId: pageId,
+        boundingBox: { x: 10, y: 10, width: 100, height: 100 },
+        points: originalPoints,
+        meta: { order: {} },
+      };
+      const doc = createDocument([
+        createPage(pageId, { x: 0, y: 0, width: 1000, height: 1000 }),
+        penShape,
+      ]);
+      const resized = applyTransaction(
+        doc,
+        createTransaction([
+          {
+            type: COMMANDS.setShapeBoundingBox,
+            id: penId,
+            boundingBox: { x: 50, y: 50, width: 500, height: 500 },
+          },
+        ]),
+      );
+      const undone = applyTransaction(resized.document, createTransaction(resized.inverse));
+      const restoredPen = undone.document.shapes[penId] as typeof penShape;
+      expect(restoredPen.points).toEqual(originalPoints);
+    });
+  });
 });

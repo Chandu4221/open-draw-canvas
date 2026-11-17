@@ -1,17 +1,18 @@
 // Mutates a shape record in-place for a single command and returns inverse commands.
 // Used by applyTransaction to batch N commands in O(N) without intermediate Document copying (R-018, ADR-0002 D8).
-import type { DeviceType, PluginId, ShapeId } from "@open-draw/contracts";
-import { isRootId, parsePluginId, SHAPE_KINDS } from "@open-draw/contracts";
+import type { BoundingBox, DeviceType, PluginId, ShapeId } from "@open-draw/contracts";
+import { isRootId, MAX_COORDINATE_BOUND, parsePluginId, SHAPE_KINDS } from "@open-draw/contracts";
 import { COMMANDS } from "./commands/registry";
 import type { Command } from "./commands";
 import type { CreateShape } from "./commands/create-shape";
 import type { ShapeScaleHook } from "./commands/set-shape-bounding-box";
 import { deriveDeterministicId } from "./commands/duplicate-shapes";
+import { applyReorderShapesToMap } from "./commands/reorder-shapes";
 import type { Document } from "./document";
 import { SCHEMA_VERSION } from "./document";
 import { DocumentError } from "./errors";
 import { pruneSelectedDescendants } from "./reparent";
-import { isCustomShape, type Shape } from "./shape";
+import { isCustomShape, type LineShape, type PenPathShape, type Shape } from "./shape";
 import { subtreeOf } from "./tree";
 import { parseShape } from "./validation";
 import { parseColor, parseFillStyle, parseStrokeWidth } from "./style-validation";
@@ -115,18 +116,47 @@ export function applyCommandToMap(
       if (command.dx === 0 && command.dy === 0) {
         return [];
       }
+      let allExactDeltasMatch = true;
+      const originalBoxes = new Map<ShapeId, BoundingBox>();
       for (const id of command.ids) {
         const shape = shapes[id]!;
+        originalBoxes.set(id, shape.boundingBox);
+        const newX = Math.max(
+          -MAX_COORDINATE_BOUND,
+          Math.min(MAX_COORDINATE_BOUND, shape.boundingBox.x + command.dx),
+        );
+        const newY = Math.max(
+          -MAX_COORDINATE_BOUND,
+          Math.min(MAX_COORDINATE_BOUND, shape.boundingBox.y + command.dy),
+        );
+        if (
+          newX - shape.boundingBox.x !== command.dx ||
+          newY - shape.boundingBox.y !== command.dy
+        ) {
+          allExactDeltasMatch = false;
+        }
         shapes[id] = {
           ...shape,
           boundingBox: {
             ...shape.boundingBox,
-            x: shape.boundingBox.x + command.dx,
-            y: shape.boundingBox.y + command.dy,
+            x: newX,
+            y: newY,
           },
         };
       }
-      return [{ type: COMMANDS.moveShapes, ids: command.ids, dx: -command.dx, dy: -command.dy }];
+      if (allExactDeltasMatch) {
+        return [{ type: COMMANDS.moveShapes, ids: command.ids, dx: -command.dx, dy: -command.dy }];
+      }
+      return command.ids.map((id) => {
+        const orig = originalBoxes.get(id)!;
+        const moved = shapes[id]!;
+        return {
+          type: COMMANDS.moveShapes,
+          ids: [id],
+          dx: -(moved.boundingBox.x - orig.x),
+          dy: -(moved.boundingBox.y - orig.y),
+        };
+      });
     }
 
     case COMMANDS.setShapeBoundingBox: {
@@ -148,57 +178,94 @@ export function applyCommandToMap(
         );
       }
       const previousBox = shape.boundingBox;
+      const targetBox: BoundingBox = {
+        x: Math.max(-MAX_COORDINATE_BOUND, Math.min(MAX_COORDINATE_BOUND, command.boundingBox.x)),
+        y: Math.max(-MAX_COORDINATE_BOUND, Math.min(MAX_COORDINATE_BOUND, command.boundingBox.y)),
+        width: Math.min(MAX_COORDINATE_BOUND, Math.max(1, command.boundingBox.width)),
+        height: Math.min(MAX_COORDINATE_BOUND, Math.max(1, command.boundingBox.height)),
+      };
       if (
         scaleHook === undefined &&
-        previousBox.x === command.boundingBox.x &&
-        previousBox.y === command.boundingBox.y &&
-        previousBox.width === command.boundingBox.width &&
-        previousBox.height === command.boundingBox.height
+        command.pointsSnapshot === undefined &&
+        previousBox.x === targetBox.x &&
+        previousBox.y === targetBox.y &&
+        previousBox.width === targetBox.width &&
+        previousBox.height === targetBox.height
       ) {
         return [];
       }
 
+      const previousSnapshot =
+        shape.kind === SHAPE_KINDS.line
+          ? { start: (shape as LineShape).start, end: (shape as LineShape).end }
+          : shape.kind === SHAPE_KINDS.penPath
+            ? { points: (shape as PenPathShape).points }
+            : undefined;
+
       let nextShape: Shape;
       if (scaleHook !== undefined) {
-        nextShape = scaleHook(shape, previousBox, command.boundingBox);
+        nextShape = scaleHook(shape, previousBox, targetBox);
       } else if (!isCustomShape(shape)) {
         switch (shape.kind) {
           case SHAPE_KINDS.line: {
-            const scaleX =
-              previousBox.width === 0 ? 1 : command.boundingBox.width / previousBox.width;
-            const scaleY =
-              previousBox.height === 0 ? 1 : command.boundingBox.height / previousBox.height;
-            nextShape = {
-              ...shape,
-              boundingBox: command.boundingBox,
-              start: { x: shape.start.x * scaleX, y: shape.start.y * scaleY },
-              end: { x: shape.end.x * scaleX, y: shape.end.y * scaleY },
-            };
+            if (
+              command.pointsSnapshot?.start !== undefined &&
+              command.pointsSnapshot?.end !== undefined
+            ) {
+              nextShape = {
+                ...shape,
+                boundingBox: targetBox,
+                start: command.pointsSnapshot.start,
+                end: command.pointsSnapshot.end,
+              };
+            } else {
+              const scaleX = previousBox.width === 0 ? 1 : targetBox.width / previousBox.width;
+              const scaleY = previousBox.height === 0 ? 1 : targetBox.height / previousBox.height;
+              nextShape = {
+                ...shape,
+                boundingBox: targetBox,
+                start: { x: shape.start.x * scaleX, y: shape.start.y * scaleY },
+                end: { x: shape.end.x * scaleX, y: shape.end.y * scaleY },
+              };
+            }
             break;
           }
           case SHAPE_KINDS.penPath: {
-            const scaleX =
-              previousBox.width === 0 ? 1 : command.boundingBox.width / previousBox.width;
-            const scaleY =
-              previousBox.height === 0 ? 1 : command.boundingBox.height / previousBox.height;
-            nextShape = {
-              ...shape,
-              boundingBox: command.boundingBox,
-              points: shape.points.map((p) => ({ x: p.x * scaleX, y: p.y * scaleY })),
-            };
+            if (command.pointsSnapshot?.points !== undefined) {
+              nextShape = {
+                ...shape,
+                boundingBox: targetBox,
+                points: command.pointsSnapshot.points,
+              };
+            } else {
+              const scaleX = previousBox.width === 0 ? 1 : targetBox.width / previousBox.width;
+              const scaleY = previousBox.height === 0 ? 1 : targetBox.height / previousBox.height;
+              nextShape = {
+                ...shape,
+                boundingBox: targetBox,
+                points: shape.points.map((p) => ({ x: p.x * scaleX, y: p.y * scaleY })),
+              };
+            }
             break;
           }
           default: {
-            nextShape = { ...shape, boundingBox: command.boundingBox };
+            nextShape = { ...shape, boundingBox: targetBox };
             break;
           }
         }
       } else {
-        nextShape = { ...shape, boundingBox: command.boundingBox };
+        nextShape = { ...shape, boundingBox: targetBox };
       }
 
       shapes[command.id] = nextShape;
-      return [{ type: COMMANDS.setShapeBoundingBox, id: command.id, boundingBox: previousBox }];
+      return [
+        {
+          type: COMMANDS.setShapeBoundingBox,
+          id: command.id,
+          boundingBox: previousBox,
+          ...(previousSnapshot !== undefined ? { pointsSnapshot: previousSnapshot } : {}),
+        },
+      ];
     }
 
     case COMMANDS.setRootStyle: {
@@ -413,8 +480,14 @@ export function applyCommandToMap(
         const newBoundingBox = isTopLevel
           ? {
               ...shape.boundingBox,
-              x: shape.boundingBox.x + dx,
-              y: shape.boundingBox.y + dy,
+              x: Math.max(
+                -MAX_COORDINATE_BOUND,
+                Math.min(MAX_COORDINATE_BOUND, shape.boundingBox.x + dx),
+              ),
+              y: Math.max(
+                -MAX_COORDINATE_BOUND,
+                Math.min(MAX_COORDINATE_BOUND, shape.boundingBox.y + dy),
+              ),
             }
           : shape.boundingBox;
         shapes[newId] = {
@@ -464,6 +537,10 @@ export function applyCommandToMap(
           data: previousData,
         },
       ];
+    }
+
+    case COMMANDS.reorderShapes: {
+      return applyReorderShapesToMap(shapes, command);
     }
   }
 }

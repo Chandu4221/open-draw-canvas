@@ -33,6 +33,15 @@ export function parseMeta(value: unknown, isRootShape = false): ShapeMeta {
   if (!isRecord(value)) {
     throw new DocumentError("invalidMeta", "meta must be an object");
   }
+  if (
+    Object.prototype.hasOwnProperty.call(value, "__proto__") ||
+    Object.prototype.hasOwnProperty.call(value, "constructor")
+  ) {
+    throw new DocumentError(
+      "invalidMeta",
+      "prototype pollution keys (__proto__, constructor) are forbidden in meta",
+    );
+  }
   if (!isRootShape) {
     if (value.style !== undefined) {
       throw new DocumentError("invalidMeta", "style may only be set on root shapes (R-026)");

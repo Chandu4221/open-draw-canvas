@@ -89,5 +89,8 @@ export function transition(previous: MachineState, event: CanvasEvent): MachineS
     case CANVAS_EVENTS.keyEscape: {
       return INITIAL_MACHINE_STATE;
     }
+    default: {
+      return previous;
+    }
   }
 }

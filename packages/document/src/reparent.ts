@@ -26,7 +26,11 @@ export function pointInBox(box: BoundingBox, point: Point): boolean {
  * Page and section shapes are explicit containers.
  * Shapes with existing children or explicit container metadata act as containers.
  */
-export function isContainerShape(shape: Shape, doc?: Document): boolean {
+export function isContainerShape(
+  shape: Shape,
+  doc?: Document,
+  hasContainerCapability?: (kind: string) => boolean,
+): boolean {
   if (
     shape.kind === SHAPE_KINDS.line ||
     shape.kind === SHAPE_KINDS.penPath ||
@@ -43,6 +47,9 @@ export function isContainerShape(shape: Shape, doc?: Document): boolean {
   if (doc !== undefined && childrenOf(doc, shape.id).length > 0) {
     return true;
   }
+  if (hasContainerCapability !== undefined && hasContainerCapability(shape.kind)) {
+    return true;
+  }
   return false;
 }
 
@@ -55,6 +62,7 @@ export function pickDropTarget(
   doc: Document,
   worldPoint: Point,
   excludedIds: readonly ShapeId[] = [],
+  hasContainerCapability?: (kind: string) => boolean,
 ): ShapeId {
   const fullExcluded = new Set<ShapeId>();
   for (const id of excludedIds) {
@@ -73,7 +81,7 @@ export function pickDropTarget(
     if (fullExcluded.has(candidate.id)) {
       continue;
     }
-    if (!isContainerShape(candidate, doc)) {
+    if (!isContainerShape(candidate, doc, hasContainerCapability)) {
       continue;
     }
     const box = absoluteBoundingBox(doc, candidate);

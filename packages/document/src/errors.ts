@@ -2,6 +2,8 @@
 // fallback or coercion). One canonical registry; callers branch on `code`.
 export const DOCUMENT_ERRORS = {
   documentDepthExceeded: "document-depth-exceeded",
+  documentShapeCountExceeded: "document-shape-count-exceeded",
+  documentSizeExceeded: "document-size-exceeded",
   duplicateShapeId: "duplicate-shape-id",
   invalidCommand: "invalid-command",
   invalidDocument: "invalid-document",

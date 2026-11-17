@@ -120,23 +120,24 @@ See [custom-shapes.md](docs/custom-shapes.md) for full documentation on custom s
 
 ### `EditorOptions`
 
-| Option            | Type                               | Description                                                     |
-| ----------------- | ---------------------------------- | --------------------------------------------------------------- |
-| `document`        | `Document`                         | Initial document model (defaults to empty document)             |
-| `tool`            | `ToolId`                           | Active tool (defaults to `TOOLS.select`)                        |
-| `customShapes`    | `readonly CustomShapeExtension[]`  | Custom shapes registered on mount                               |
-| `customRenderers` | `Record<string, ShapeSvgRenderer>` | Per-kind SVG render override functions                          |
-| `snapping`        | `boolean \| SnapConfig`            | Magnetic alignment snapping options                             |
-| `nestingMode`     | `"containers-only" \| "all"`       | Nesting behavior when drawing over shapes                       |
-| `onDoubleClick`   | `(shapeId: ShapeId) => void`       | Double-click callback hook                                      |
-| `onFallback`      | `(msg: string) => void`            | Notification when an unregistered shape uses fallback rendering |
+| Option            | Type                               | Description                                                                 |
+| ----------------- | ---------------------------------- | --------------------------------------------------------------------------- |
+| `document`        | `Document`                         | Initial document model (defaults to empty document)                         |
+| `tool`            | `ToolId`                           | Active tool (defaults to `TOOLS.select`)                                    |
+| `customShapes`    | `readonly CustomShapeExtension[]`  | Custom shapes registered on mount                                           |
+| `customRenderers` | `Record<string, ShapeSvgRenderer>` | Per-kind SVG render override functions                                      |
+| `snapping`        | `boolean \| SnapConfig`            | Magnetic alignment snapping options                                         |
+| `nestingMode`     | `"containers-only" \| "off"`       | Nesting behavior when drawing over shapes (defaults to `"containers-only"`) |
+| `onDoubleClick`   | `(shapeId: ShapeId) => void`       | Double-click callback hook                                                  |
+| `onFallback`      | `(msg: string) => void`            | Notification when an unregistered shape uses fallback rendering             |
 
 ### `Editor` Instance Methods
 
 - **Document & History**: `getDocument()`, `setDocument(doc, opts?)`, `loadJson(json, opts?)`, `toJson()`, `toSvg()`, `execute(cmds)`, `undo()`, `redo()`, `canUndo()`, `canRedo()`
 - **Tools & Selection**: `getTool()`, `setTool(tool)`, `getSelection()`, `select(id)`, `selectMany(ids)`, `clearSelection()`
 - **Camera Navigation**: `getCamera()`, `setCamera(cam)`, `zoomIn()`, `zoomOut()`, `resetZoom()`
-- **Shape Modification**: `setTextContent(id, text)`, `setShapeStyle(id, style)`, `setShapeOrder(id, deviceType, order)`
+- **Shape Modification**: `setTextContent(id, text)`, `setShapeStyle(id, style)`, `setShapeOrder(id, deviceType, order)`, `setShapePluginData(id, pluginId, data)`
+- **Z-Ordering**: `bringToFront(ids?)`, `sendToBack(ids?)`, `bringForward(ids?)`, `sendBackward(ids?)`
 - **Extensions**: `registerCustomShape(ext)`, `getCustomShape(kind)`, `getCustomShapes()`, `insertCustomShape(kind, box, opts?)`
 - **Lifecycle**: `render()`, `destroy()`, `subscribe(event, listener)`
 

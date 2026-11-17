@@ -405,4 +405,59 @@ describe("parseDocument", () => {
       expect(() => parseDocument(invalidDoc)).toThrowError(/fillStyle must be one of/);
     });
   });
+
+  describe("document envelope limits (P0-3)", () => {
+    it("rejects documents with shapes exceeding MAX_DOCUMENT_SHAPE_COUNT", () => {
+      const hostileShapes: Record<string, unknown> = {};
+      for (let i = 0; i <= 10_000; i += 1) {
+        hostileShapes[`rect-${i}`] = {
+          id: `rect-${i}`,
+          kind: "rect",
+          parentId: ROOT_ID,
+          boundingBox: { x: 0, y: 0, width: 100, height: 100 },
+          meta: { order: {} },
+        };
+      }
+      const hostileDoc = {
+        schema: { version: 1 },
+        shapes: hostileShapes,
+      };
+      expect(() => parseDocument(hostileDoc)).toThrowError(/exceeds maximum allowed shapes/);
+    });
+
+    it("rejects pen path with points exceeding MAX_PEN_PATH_POINTS", () => {
+      const points = Array.from({ length: 2_001 }, (_, i) => ({ x: i, y: i }));
+      const hostileDoc = serialize([
+        page,
+        {
+          id: parseShapeId("pen-huge"),
+          kind: "pen-path" as const,
+          parentId: parseShapeId("page-1"),
+          boundingBox: { x: 0, y: 0, width: 100, height: 100 },
+          points,
+          meta: { order: {} },
+        },
+      ]);
+      expect(() => parseDocument(hostileDoc)).toThrowError(/exceeds maximum allowed points/);
+    });
+  });
+
+  describe("prototype pollution guards (P2-10)", () => {
+    it("rejects __proto__ and constructor property injection in meta", () => {
+      const hostileMeta = JSON.parse('{"order":{}, "__proto__":{"polluted":true}}');
+      const hostileDoc = {
+        schema: { version: 1 },
+        shapes: {
+          "rect-proto": {
+            id: "rect-proto",
+            kind: "rect",
+            parentId: ROOT_ID,
+            boundingBox: { x: 0, y: 0, width: 100, height: 100 },
+            meta: hostileMeta,
+          },
+        },
+      };
+      expect(() => parseDocument(hostileDoc)).toThrowError(/invalidMeta/);
+    });
+  });
 });

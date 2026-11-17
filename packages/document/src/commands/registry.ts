@@ -14,6 +14,7 @@ export const COMMANDS = {
   setShapeContent: "SetShapeContent",
   duplicateShapes: "DuplicateShapes",
   setShapePluginData: "SetShapePluginData",
+  reorderShapes: "ReorderShapes",
 } as const;
 
 export type CommandId = (typeof COMMANDS)[keyof typeof COMMANDS];

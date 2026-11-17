@@ -31,6 +31,7 @@ export interface SnapConfig {
 }
 
 export interface EditorOptions {
+  readonly instanceId?: string | undefined;
   readonly document?: Document;
   readonly canvasOptions?: CanvasOptions;
   readonly tool?: ToolId;
@@ -79,6 +80,10 @@ export interface Editor {
   ): void;
   setShapeOrder(id: ShapeId, deviceType: DeviceType, order: number | null): void;
   setShapePluginData(id: ShapeId, pluginId: PluginId, data: unknown | null): void;
+  bringToFront(ids?: readonly ShapeId[]): void;
+  sendToBack(ids?: readonly ShapeId[]): void;
+  bringForward(ids?: readonly ShapeId[]): void;
+  sendBackward(ids?: readonly ShapeId[]): void;
   execute(commands: Command | readonly Command[], options?: { record?: boolean }): void;
   undo(): boolean;
   redo(): boolean;

@@ -43,15 +43,16 @@ import {
 } from "./selection";
 
 export interface CanvasOptions {
+  readonly instanceId?: string | undefined;
   readonly camera?: Camera;
   readonly selection?: Selection;
   readonly shapeKinds?: ShapeKindRegistry | readonly ShapeKindRegistration[];
   readonly activeDeviceType?: DeviceType;
   readonly activeDeviceTypes?: Readonly<Record<ShapeId, DeviceType | undefined>>;
-  readonly visibleChipRootIds?: readonly ShapeId[] | ReadonlySet<ShapeId>;
 }
 
 export interface CanvasController {
+  getInstanceId(): string | undefined;
   getCamera(): Camera;
   setCamera(camera: Camera): void;
   panBy(screenDelta: Point): void;
@@ -92,11 +93,6 @@ export interface CanvasController {
   getActiveDeviceType(rootId?: ShapeId): DeviceType | undefined;
   setActiveDeviceType(deviceType?: DeviceType, rootId?: ShapeId): void;
   getActiveDeviceTypes(): Readonly<Record<ShapeId, DeviceType | undefined>>;
-
-  getVisibleChipRootIds(): ReadonlySet<ShapeId>;
-  isRootChipsVisible(rootId: ShapeId): boolean;
-  toggleRootChipsVisible(rootId: ShapeId): void;
-  setRootChipsVisible(rootId: ShapeId, visible: boolean): void;
 }
 
 export function createCanvas(options: CanvasOptions = {}): CanvasController {
@@ -108,7 +104,6 @@ export function createCanvas(options: CanvasOptions = {}): CanvasController {
       ? (Object.entries(options.activeDeviceTypes) as [ShapeId, DeviceType | undefined][])
       : [],
   );
-  const visibleChipRootIds = new Set<ShapeId>(options.visibleChipRootIds ?? []);
   let machine = INITIAL_MACHINE_STATE;
   let shapeKindRegistry: ShapeKindRegistry =
     options.shapeKinds === undefined
@@ -257,6 +252,7 @@ export function createCanvas(options: CanvasOptions = {}): CanvasController {
   }
 
   return {
+    getInstanceId: () => options.instanceId,
     getCamera: () => camera,
     setCamera: (next) => {
       camera = clampCamera(next);
@@ -367,22 +363,5 @@ export function createCanvas(options: CanvasOptions = {}): CanvasController {
     },
     getActiveDeviceTypes: () =>
       Object.fromEntries(scopedDeviceTypes.entries()) as Record<ShapeId, DeviceType | undefined>,
-
-    getVisibleChipRootIds: () => visibleChipRootIds,
-    isRootChipsVisible: (rootId) => visibleChipRootIds.has(rootId),
-    toggleRootChipsVisible: (rootId) => {
-      if (visibleChipRootIds.has(rootId)) {
-        visibleChipRootIds.delete(rootId);
-      } else {
-        visibleChipRootIds.add(rootId);
-      }
-    },
-    setRootChipsVisible: (rootId, visible) => {
-      if (visible) {
-        visibleChipRootIds.add(rootId);
-      } else {
-        visibleChipRootIds.delete(rootId);
-      }
-    },
   };
 }

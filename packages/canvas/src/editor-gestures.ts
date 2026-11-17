@@ -1,7 +1,7 @@
 // Gesture commit logic for standalone editor (R-004, R-008, R-018).
 // Translates pointer completion into typed document commands.
 import type { BoundingBox, Point, ShapeId } from "@open-draw/contracts";
-import { isRootId, ROOT_ID } from "@open-draw/contracts";
+import { CAPABILITIES, isRootId, ROOT_ID } from "@open-draw/contracts";
 import type { SnapGuide } from "./snap-solver";
 import {
   absoluteBoundingBox,
@@ -85,6 +85,7 @@ export function commitDragGesture(
   world: Point,
   execute: (commands: readonly Command[]) => void,
   nestingMode: NestingMode = "containers-only",
+  hasContainerCapability?: (kind: string) => boolean,
 ): void {
   const dx = world.x - gesture.startWorld.x;
   const dy = world.y - gesture.startWorld.y;
@@ -112,7 +113,7 @@ export function commitDragGesture(
     };
     const targetParentId =
       nestingMode === "containers-only"
-        ? pickDropTarget(doc, center, topLevelShapeIds)
+        ? pickDropTarget(doc, center, topLevelShapeIds, hasContainerCapability)
         : shape.parentId;
 
     if (targetParentId !== shape.parentId) {
@@ -213,7 +214,11 @@ export function commitDrawGesture(
   idGen: ShapeIdGenerator = (doc?: Document) => createShapeIdGenerator(doc).nextShapeId(doc),
 ): void {
   const targetParentId =
-    nestingMode === "containers-only" ? pickDropTarget(doc, gesture.startWorld, []) : ROOT_ID;
+    nestingMode === "containers-only"
+      ? pickDropTarget(doc, gesture.startWorld, [], (kind) =>
+          canvas.hasCapability(kind, CAPABILITIES.container),
+        )
+      : ROOT_ID;
   const targetParent = !isRootId(targetParentId) ? doc.shapes[targetParentId] : undefined;
   const parentBox =
     targetParent !== undefined ? absoluteBoundingBox(doc, targetParent) : { x: 0, y: 0 };

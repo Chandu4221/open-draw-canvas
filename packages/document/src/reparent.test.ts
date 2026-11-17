@@ -54,7 +54,7 @@ describe("reparent helpers and N-level deep hierarchies", () => {
       expect(isContainerShape(doc.shapes[freeRectId]!, doc)).toBe(false);
     });
 
-    it("treats rectangle with explicit isContainer meta as a container", () => {
+    it("treats shape with container capability as a container", () => {
       const pageShapeId = parseShapeId("screen-page");
       const cardInsidePageId = parseShapeId("card-inside-page");
       const pageDoc = createDocument([
@@ -62,13 +62,19 @@ describe("reparent helpers and N-level deep hierarchies", () => {
         createRect(
           cardInsidePageId,
           { x: 10, y: 10, width: 200, height: 200 },
-          {
-            parent: pageShapeId,
-            meta: { order: {}, isContainer: true },
-          },
+          { parent: pageShapeId },
         ),
       ]);
-      expect(isContainerShape(pageDoc.shapes[cardInsidePageId]!, pageDoc)).toBe(true);
+      expect(
+        isContainerShape(pageDoc.shapes[cardInsidePageId]!, pageDoc, (kind) => kind === "rect"),
+      ).toBe(true);
+      expect(
+        isContainerShape(
+          pageDoc.shapes[cardInsidePageId]!,
+          pageDoc,
+          (kind) => kind === "custom:panel",
+        ),
+      ).toBe(false);
     });
 
     it("identifies shape with children as a container", () => {

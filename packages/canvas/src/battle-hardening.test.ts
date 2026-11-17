@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   MAX_DOCUMENT_DEPTH,
+  parseCustomShapeKind,
   parseShapeId,
   ROOT_ID,
   type BoundingBox,
@@ -13,6 +14,7 @@ import {
   COMMANDS,
   createDocument,
   createRect,
+  shapeListInOrder,
   type RectShape,
   type Shape,
 } from "@open-draw/document";
@@ -23,6 +25,7 @@ import { MIN_SHAPE_SIZE, resizeBox } from "./geometry";
 import { HANDLES } from "./handles";
 import { pickShape } from "./hit-test";
 import { querySpatialIndexBox } from "./spatial/spatial-index";
+import { INITIAL_MACHINE_STATE, transition } from "./machine";
 import { TOOLS } from "./tools";
 
 class MockDomNode {
@@ -127,9 +130,22 @@ describe("Battle Hardening (ADR-0008, ADR-0011, R-006, R-016, R-039)", () => {
       body: new MockDomNode("body"),
       activeElement: null,
     };
+    const windowListeners: Record<string, ((event: unknown) => void)[]> = {};
     (globalThis as unknown as { window: unknown }).window = {
-      addEventListener: () => {},
-      removeEventListener: () => {},
+      addEventListener: (evt: string, fn: (event: unknown) => void) => {
+        windowListeners[evt] = windowListeners[evt] ?? [];
+        windowListeners[evt]!.push(fn);
+      },
+      removeEventListener: (evt: string, fn: (event: unknown) => void) => {
+        if (windowListeners[evt]) {
+          windowListeners[evt] = windowListeners[evt]!.filter((f) => f !== fn);
+        }
+      },
+      dispatch: (evt: string, arg: unknown) => {
+        for (const fn of windowListeners[evt] ?? []) {
+          fn(arg);
+        }
+      },
     };
 
     container = new MockDomNode("div");
@@ -381,5 +397,163 @@ describe("Battle Hardening (ADR-0008, ADR-0011, R-006, R-016, R-039)", () => {
     const collapsedByResize = resizeBox(origBox, HANDLES.se, { x: 50, y: 50 });
     expect(collapsedByResize.width).toBeGreaterThanOrEqual(MIN_SHAPE_SIZE);
     expect(collapsedByResize.height).toBeGreaterThanOrEqual(MIN_SHAPE_SIZE);
+  });
+
+  describe("multi-editor isolation and FSM hardening (P1-4, P1-8)", () => {
+    it("isolates instanceId across editor instances (P1-4)", () => {
+      const ed1 = createEditor(container as unknown as HTMLElement, { instanceId: "ed-1" });
+      const ed2 = createEditor(container as unknown as HTMLElement, { instanceId: "ed-2" });
+      expect(ed1.canvas.getInstanceId()).toBe("ed-1");
+      expect(ed2.canvas.getInstanceId()).toBe("ed-2");
+      ed1.destroy();
+      ed2.destroy();
+    });
+
+    it("wires instanceId into SVG rendering to prevent defs/clipPath collision (P1-4)", () => {
+      const ed1 = createEditor(container as unknown as HTMLElement, {
+        instanceId: "editor-alpha",
+      });
+      ed1.setTool(TOOLS.drawRect);
+      const shape = createRect(
+        parseShapeId("rect-clipped"),
+        { x: 10, y: 10, width: 100, height: 50 },
+        { content: "Clipped Text" },
+      );
+      ed1.setDocument(createDocument([shape]));
+      const svg = ed1.toSvg();
+      expect(svg).toContain('clipPath id="clip-editor-alpha-rect-clipped"');
+      ed1.destroy();
+    });
+
+    it("FSM returns previous state on unrecognized events instead of undefined (P1-8)", () => {
+      const state = INITIAL_MACHINE_STATE;
+      const invalidEvent = { type: "unknownCustomEvent" } as unknown as Parameters<
+        typeof transition
+      >[1];
+      const next = transition(state, invalidEvent);
+      expect(next).toBeDefined();
+      expect(next).toEqual(state);
+    });
+
+    it("enforces capability restrictions: non-movable shapes cannot be dragged (P1-5)", () => {
+      const ed = createEditor(container as unknown as HTMLElement);
+      ed.registerCustomShape({
+        kind: parseCustomShapeKind("custom:fixed"),
+        label: "Fixed Shape",
+        capabilities: [],
+        render: (_s, box) =>
+          `<rect x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" fill="#eee" />`,
+      });
+      const fixedShape = ed.insertCustomShape(parseCustomShapeKind("custom:fixed"), {
+        x: 50,
+        y: 50,
+        width: 100,
+        height: 100,
+      });
+      ed.select(fixedShape.id);
+
+      const mockSvg = ed.svg as unknown as {
+        dispatch: (event: string, data: unknown) => void;
+      };
+      mockSvg.dispatch("pointerdown", {
+        button: 0,
+        pointerId: 10,
+        clientX: 60,
+        clientY: 60,
+        preventDefault: () => {},
+      });
+      mockSvg.dispatch("pointermove", {
+        pointerId: 10,
+        clientX: 120,
+        clientY: 120,
+        preventDefault: () => {},
+      });
+      mockSvg.dispatch("pointerup", {
+        pointerId: 10,
+        clientX: 120,
+        clientY: 120,
+        preventDefault: () => {},
+      });
+
+      const afterShape = ed.getDocument().shapes[fixedShape.id]!;
+      expect(afterShape.boundingBox.x).toBe(50);
+      expect(afterShape.boundingBox.y).toBe(50);
+      ed.destroy();
+    });
+
+    it("reorders shapes via Editor z-ordering methods", () => {
+      const container = new MockDomNode("div") as unknown as HTMLElement;
+      const s1 = parseShapeId("rect-1");
+      const s2 = parseShapeId("rect-2");
+      const s3 = parseShapeId("rect-3");
+      const doc = createDocument([
+        createRect(s1, { x: 0, y: 0, width: 50, height: 50 }, { parentId: ROOT_ID }),
+        createRect(s2, { x: 60, y: 0, width: 50, height: 50 }, { parentId: ROOT_ID }),
+        createRect(s3, { x: 120, y: 0, width: 50, height: 50 }, { parentId: ROOT_ID }),
+      ]);
+      const ed = createEditor(container, { document: doc });
+
+      // s1 bringToFront -> order [s2, s3, s1]
+      ed.bringToFront([s1]);
+      expect(shapeListInOrder(ed.getDocument()).map((s) => s.id)).toEqual([s2, s3, s1]);
+
+      // s1 sendToBack -> order [s1, s2, s3]
+      ed.sendToBack([s1]);
+      expect(shapeListInOrder(ed.getDocument()).map((s) => s.id)).toEqual([s1, s2, s3]);
+
+      // s1 bringForward -> order [s2, s1, s3]
+      ed.bringForward([s1]);
+      expect(shapeListInOrder(ed.getDocument()).map((s) => s.id)).toEqual([s2, s1, s3]);
+
+      // s1 sendBackward -> order [s1, s2, s3]
+      ed.sendBackward([s1]);
+      expect(shapeListInOrder(ed.getDocument()).map((s) => s.id)).toEqual([s1, s2, s3]);
+
+      // Undo works losslessly
+      ed.undo();
+      expect(shapeListInOrder(ed.getDocument()).map((s) => s.id)).toEqual([s2, s1, s3]);
+
+      ed.destroy();
+    });
+
+    it("reorders shapes via keyboard shortcuts", () => {
+      const container = new MockDomNode("div") as unknown as HTMLElement;
+      const s1 = parseShapeId("rect-1");
+      const s2 = parseShapeId("rect-2");
+      const s3 = parseShapeId("rect-3");
+      const doc = createDocument([
+        createRect(s1, { x: 0, y: 0, width: 50, height: 50 }, { parentId: ROOT_ID }),
+        createRect(s2, { x: 60, y: 0, width: 50, height: 50 }, { parentId: ROOT_ID }),
+        createRect(s3, { x: 120, y: 0, width: 50, height: 50 }, { parentId: ROOT_ID }),
+      ]);
+      const ed = createEditor(container, { document: doc });
+      ed.select(s1);
+
+      const mockWin = (
+        globalThis as unknown as { window: { dispatch: (evt: string, arg: unknown) => void } }
+      ).window;
+
+      // BracketRight with ctrlKey + shiftKey -> bringToFront
+      mockWin.dispatch("keydown", {
+        code: "BracketRight",
+        ctrlKey: true,
+        shiftKey: true,
+        target: ed.svg,
+        preventDefault: () => {},
+      });
+      expect(shapeListInOrder(ed.getDocument()).map((s) => s.id)).toEqual([s2, s3, s1]);
+
+      // BracketLeft with ctrlKey + shiftKey -> sendToBack
+      mockWin.dispatch("keydown", {
+        code: "BracketLeft",
+        ctrlKey: true,
+        shiftKey: true,
+        target: ed.svg,
+        preventDefault: () => {},
+      });
+      expect(shapeListInOrder(ed.getDocument()).map((s) => s.id)).toEqual([s1, s2, s3]);
+
+      ed.destroy();
+    });
   });
 });

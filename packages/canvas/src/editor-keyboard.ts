@@ -9,6 +9,7 @@ import {
   COMMANDS,
   pruneSelectedDescendants,
   redo,
+  REORDER_OPERATIONS,
   subtreeOf,
   undo,
   type Command,
@@ -162,7 +163,8 @@ export function attachKeyboardListeners(
             shapes.push(...subtreeOf(doc, topId));
           }
           copySequence += 1;
-          const copyId = `cp-${copySequence}`;
+          const inst = canvas.getInstanceId?.() ?? "0";
+          const copyId = `cp-${inst}-${copySequence}`;
           clipboard = { copyId, shapes, topLevelIds, count: 0 };
           if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
             try {
@@ -361,6 +363,7 @@ export function attachKeyboardListeners(
         break;
       case ACTIONS.undo: {
         event.preventDefault();
+        resetGesture();
         const undone = undo(getDoc(), getHistory());
         if (undone !== null) {
           setDoc(undone.document);
@@ -373,6 +376,7 @@ export function attachKeyboardListeners(
       }
       case ACTIONS.redo: {
         event.preventDefault();
+        resetGesture();
         const redone = redo(getDoc(), getHistory());
         if (redone !== null) {
           setDoc(redone.document);
@@ -417,6 +421,62 @@ export function attachKeyboardListeners(
           ]);
           const newTopIds = topLevelIds.map((id) => newShapeIds[id]!);
           canvas.selectMany(newTopIds);
+        }
+        break;
+      }
+      case ACTIONS.bringToFront: {
+        event.preventDefault();
+        const ids = canvas.getSelectedIds();
+        if (ids.length > 0) {
+          execute([
+            {
+              type: COMMANDS.reorderShapes,
+              ids,
+              operation: REORDER_OPERATIONS.bringToFront,
+            },
+          ]);
+        }
+        break;
+      }
+      case ACTIONS.bringForward: {
+        event.preventDefault();
+        const ids = canvas.getSelectedIds();
+        if (ids.length > 0) {
+          execute([
+            {
+              type: COMMANDS.reorderShapes,
+              ids,
+              operation: REORDER_OPERATIONS.bringForward,
+            },
+          ]);
+        }
+        break;
+      }
+      case ACTIONS.sendBackward: {
+        event.preventDefault();
+        const ids = canvas.getSelectedIds();
+        if (ids.length > 0) {
+          execute([
+            {
+              type: COMMANDS.reorderShapes,
+              ids,
+              operation: REORDER_OPERATIONS.sendBackward,
+            },
+          ]);
+        }
+        break;
+      }
+      case ACTIONS.sendToBack: {
+        event.preventDefault();
+        const ids = canvas.getSelectedIds();
+        if (ids.length > 0) {
+          execute([
+            {
+              type: COMMANDS.reorderShapes,
+              ids,
+              operation: REORDER_OPERATIONS.sendToBack,
+            },
+          ]);
         }
         break;
       }

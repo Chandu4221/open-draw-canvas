@@ -113,10 +113,14 @@ describe("Downstream Package Packaging & Surface (ADR-0008, R-002, R-004)", () =
     expect(packageJson.publishConfig.types).toBe("./dist/index.d.ts");
     expect(packageJson.publishConfig.exports).toEqual({
       ".": {
-        types: "./dist/index.d.ts",
-        import: "./dist/index.js",
-        require: "./dist/index.cjs",
-        default: "./dist/index.js",
+        import: {
+          types: "./dist/index.d.ts",
+          default: "./dist/index.js",
+        },
+        require: {
+          types: "./dist/index.d.cts",
+          default: "./dist/index.cjs",
+        },
       },
     });
   });

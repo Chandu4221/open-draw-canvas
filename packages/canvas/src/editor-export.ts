@@ -9,6 +9,7 @@ export interface SvgExportOptions {
   readonly activeDeviceTypes?: Readonly<Record<ShapeId, DeviceType | undefined>> | undefined;
   readonly customRenderers?: Readonly<Record<string, ShapeSvgRenderer>> | undefined;
   readonly padding?: number | undefined;
+  readonly instanceId?: string | undefined;
 }
 
 export function exportDocumentToSvg(doc: Document, options?: SvgExportOptions): string {
@@ -54,6 +55,7 @@ export function exportDocumentToSvg(doc: Document, options?: SvgExportOptions): 
     activeDeviceType: options?.activeDeviceType,
     activeDeviceTypes: options?.activeDeviceTypes,
     customRenderers: options?.customRenderers,
+    instanceId: options?.instanceId,
   });
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x} ${y} ${width} ${height}" width="${width}" height="${height}">${content}</svg>`;

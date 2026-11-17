@@ -8,6 +8,9 @@ import {
   isValidPluginId,
   MAX_DOCUMENT_DEPTH,
   MAX_HISTORY_DEPTH,
+  MAX_DOCUMENT_SHAPE_COUNT,
+  MAX_PEN_PATH_POINTS,
+  MAX_DOCUMENT_BYTE_SIZE,
   parseCustomShapeKind,
   parsePluginId,
   SHAPE_KINDS,
@@ -79,6 +82,12 @@ describe("document-limits", () => {
 
   it("exposes MAX_HISTORY_DEPTH as 100 to prevent unbounded history growth", () => {
     expect(MAX_HISTORY_DEPTH).toBe(100);
+  });
+
+  it("exposes document envelope limits (MAX_DOCUMENT_SHAPE_COUNT, MAX_PEN_PATH_POINTS, MAX_DOCUMENT_BYTE_SIZE)", () => {
+    expect(MAX_DOCUMENT_SHAPE_COUNT).toBe(10_000);
+    expect(MAX_PEN_PATH_POINTS).toBe(2_000);
+    expect(MAX_DOCUMENT_BYTE_SIZE).toBe(10 * 1024 * 1024);
   });
 });
 

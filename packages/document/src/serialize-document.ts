@@ -64,7 +64,6 @@ function isJsonSerializable(value: unknown, seen = new Set<unknown>()): boolean 
 
 const RESERVED_CUSTOM_DATA_KEYS = new Set([
   "id",
-  "chipId",
   "kind",
   "parentId",
   "boundingBox",
