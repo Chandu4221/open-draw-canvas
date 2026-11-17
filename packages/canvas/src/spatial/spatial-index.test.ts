@@ -177,14 +177,29 @@ describe("updateSpatialIndexItem", () => {
       box: { x: 100, y: 100, width: 50, height: 50 },
       zIndex: -1,
     });
+    expect(updated).not.toBeNull();
 
-    const oldHits = querySpatialIndexPoint(updated, { x: 25, y: 25 });
+    const oldHits = querySpatialIndexPoint(updated!, { x: 25, y: 25 });
     expect(oldHits).toHaveLength(0);
 
-    const newHits = querySpatialIndexPoint(updated, { x: 125, y: 125 });
+    const newHits = querySpatialIndexPoint(updated!, { x: 125, y: 125 });
     expect(newHits).toHaveLength(1);
     expect(newHits[0]?.id).toBe(parseShapeId("s1"));
     expect(newHits[0]?.zIndex).toBe(0);
+  });
+
+  it("returns null when item is not found in spatial index (P2 failure mode)", () => {
+    const items: SpatialIndexItem[] = [
+      { id: parseShapeId("s1"), box: { x: 0, y: 0, width: 50, height: 50 }, zIndex: 0 },
+    ];
+    const index = createSpatialIndex(items);
+
+    const updated = updateSpatialIndexItem(index, {
+      id: parseShapeId("non-existent"),
+      box: { x: 100, y: 100, width: 50, height: 50 },
+      zIndex: -1,
+    });
+    expect(updated).toBeNull();
   });
 });
 
@@ -207,9 +222,30 @@ describe("findIncrementalSpatialChanges & updateSpatialIndexFromDocument", () =>
 
     const initialIndex = buildSpatialIndexFromDocument(doc1);
     const updatedIndex = updateSpatialIndexFromDocument(initialIndex, doc1, doc2, changes!);
+    expect(updatedIndex).not.toBeNull();
 
-    expect(querySpatialIndexPoint(updatedIndex, { x: 20, y: 20 })).toHaveLength(1); // hits page only
-    expect(querySpatialIndexPoint(updatedIndex, { x: 210, y: 210 })[0]?.id).toBe(rect1);
+    expect(querySpatialIndexPoint(updatedIndex!, { x: 20, y: 20 })).toHaveLength(1); // hits page only
+    expect(querySpatialIndexPoint(updatedIndex!, { x: 210, y: 210 })[0]?.id).toBe(rect1);
+  });
+
+  it("returns null when updateSpatialIndexFromDocument encounters missing shape or unindexed item", () => {
+    const pageId = parseShapeId("p1");
+    const rect1 = parseShapeId("r1");
+    const doc1 = createDocument([
+      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
+      createRect(rect1, { x: 10, y: 10, width: 50, height: 50 }, { parent: pageId }),
+    ]);
+    const doc2 = createDocument([
+      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
+      createRect(rect1, { x: 200, y: 200, width: 50, height: 50 }, { parent: pageId }),
+    ]);
+
+    // Build index that does NOT have rect1
+    const incompleteIndex = createSpatialIndex([
+      { id: pageId, box: { x: 0, y: 0, width: 800, height: 600 }, zIndex: 0 },
+    ]);
+    const res = updateSpatialIndexFromDocument(incompleteIndex, doc1, doc2, [rect1]);
+    expect(res).toBeNull();
   });
 
   it("updates spatial index incrementally through canvas controller when shape moves", () => {
@@ -233,5 +269,33 @@ describe("findIncrementalSpatialChanges & updateSpatialIndexFromDocument", () =>
     // Query with new doc without calling invalidateSpatialIndex
     expect(canvas.pickShape(doc2, { x: 20, y: 20 })).toBe(pageId);
     expect(canvas.pickShape(doc2, { x: 210, y: 210 })).toBe(rect1);
+  });
+
+  it("falls back to clean full rebuild when incremental spatial update fails and preserves query correctness (P2)", () => {
+    const pageId = parseShapeId("p1");
+    const rect1 = parseShapeId("r1");
+    const doc1 = createDocument([
+      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
+      createRect(rect1, { x: 10, y: 10, width: 50, height: 50 }, { parent: pageId }),
+    ]);
+
+    const canvas = createCanvas();
+    canvas.getSpatialIndex(doc1);
+
+    // Corrupt cached index by manually replacing it with an index missing rect1
+    const canvasInternal = canvas as unknown as { cachedSpatialIndex?: unknown };
+    if ("cachedSpatialIndex" in canvasInternal) {
+      canvasInternal.cachedSpatialIndex = createSpatialIndex([]);
+    }
+
+    // Move rect1 to (200, 200)
+    const doc2 = createDocument([
+      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
+      createRect(rect1, { x: 200, y: 200, width: 50, height: 50 }, { parent: pageId }),
+    ]);
+
+    // Should detect failed incremental update and fall back to clean full rebuild
+    expect(canvas.pickShape(doc2, { x: 210, y: 210 })).toBe(rect1);
+    expect(canvas.pickShape(doc2, { x: 20, y: 20 })).toBe(pageId);
   });
 });

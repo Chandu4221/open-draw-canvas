@@ -238,16 +238,19 @@ export function createCanvas(options: CanvasOptions = {}): CanvasController {
           cachedSpatialDoc = doc;
           return cachedSpatialIndex;
         }
-        cachedSpatialIndex = updateSpatialIndexFromDocument(
+        const updatedIndex = updateSpatialIndexFromDocument(
           cachedSpatialIndex,
           cachedSpatialDoc,
           doc,
           incrementalChanges,
         );
-        cachedSpatialDoc = doc;
-        return cachedSpatialIndex;
-      }
-      if (isSpatialEquivalent(cachedSpatialDoc, doc)) {
+        if (updatedIndex !== null) {
+          cachedSpatialIndex = updatedIndex;
+          cachedSpatialDoc = doc;
+          return cachedSpatialIndex;
+        }
+        // Incremental update failed to locate item -> fall through to full rebuild
+      } else if (isSpatialEquivalent(cachedSpatialDoc, doc)) {
         cachedSpatialDoc = doc;
         return cachedSpatialIndex;
       }

@@ -141,11 +141,11 @@ export function updateSpatialIndexItem(
   index: SpatialIndex,
   updatedItem: SpatialIndexItem,
   previousBox?: BoundingBox,
-): SpatialIndex {
-  if (index.root === null) return index;
+): SpatialIndex | null {
+  if (index.root === null) return null;
   const prevSpatialBox = previousBox ? toSpatialBox(previousBox) : undefined;
   const result = updateNodeItem(index.root, updatedItem, prevSpatialBox);
-  if (!result.updated) return index;
+  if (!result.updated) return null;
   return {
     root: result.node,
     count: index.count,
@@ -224,18 +224,18 @@ export function updateSpatialIndexFromDocument(
   prevDoc: Document,
   nextDoc: Document,
   affectedShapeIds: readonly ShapeId[],
-): SpatialIndex {
+): SpatialIndex | null {
   let currentIndex = index;
   for (let i = 0; i < affectedShapeIds.length; i += 1) {
     const id = affectedShapeIds[i]!;
     const nextShape = nextDoc.shapes[id];
     const prevShape = prevDoc.shapes[id];
-    if (nextShape === undefined || prevShape === undefined) continue;
+    if (nextShape === undefined || prevShape === undefined) return null;
 
     const nextAbsBox = absoluteBoundingBox(nextDoc, nextShape);
     const prevAbsBox = absoluteBoundingBox(prevDoc, prevShape);
 
-    currentIndex = updateSpatialIndexItem(
+    const nextIndex = updateSpatialIndexItem(
       currentIndex,
       {
         id,
@@ -244,6 +244,10 @@ export function updateSpatialIndexFromDocument(
       },
       prevAbsBox,
     );
+    if (nextIndex === null) {
+      return null;
+    }
+    currentIndex = nextIndex;
   }
   return currentIndex;
 }
