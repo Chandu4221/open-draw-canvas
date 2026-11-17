@@ -3,6 +3,7 @@
 // old parent and bounding box. Cycles are rejected by createDocument's
 // structural validation.
 import type { BoundingBox, ShapeId } from "@open-draw/contracts";
+import { MAX_COORDINATE_BOUND } from "@open-draw/contracts";
 import type { Command, CommandResult } from "..";
 import type { Document } from "../../document";
 import { createDocument } from "../../document";
@@ -25,7 +26,13 @@ export function applyReparentShape(document: Document, command: ReparentShape): 
   const previousParentId = shape.parentId;
   const previousBoundingBox = shape.boundingBox;
   const targetParentId = command.parentId ?? command.parent!;
-  const moved = { ...shape, parentId: targetParentId, boundingBox: command.boundingBox };
+  const clampedBox: BoundingBox = {
+    x: Math.max(-MAX_COORDINATE_BOUND, Math.min(MAX_COORDINATE_BOUND, command.boundingBox.x)),
+    y: Math.max(-MAX_COORDINATE_BOUND, Math.min(MAX_COORDINATE_BOUND, command.boundingBox.y)),
+    width: Math.min(MAX_COORDINATE_BOUND, Math.max(1, command.boundingBox.width)),
+    height: Math.min(MAX_COORDINATE_BOUND, Math.max(1, command.boundingBox.height)),
+  };
+  const moved = { ...shape, parentId: targetParentId, boundingBox: clampedBox };
   const others = Object.values(document.shapes).filter((entry) => entry.id !== command.id);
   const next = createDocument([...others, moved]);
   const inverse: readonly Command[] = [

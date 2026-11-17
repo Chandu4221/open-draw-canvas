@@ -538,8 +538,8 @@ describe("createEditor", () => {
 
     const idsB = Object.keys(edB.getDocument().shapes).filter((id) => id !== "seed-b");
     expect(idsB).toHaveLength(1);
-    // Editor B starts from its own independent sequence (same base ID as edA started with)
-    expect(idsB[0]).toBe(idsA[0]);
+    // Editor B starts from its own independent sequence with disjoint shape IDs (P1-4)
+    expect(idsB[0]).not.toBe(idsA[0]);
 
     edA.destroy();
     edB.destroy();

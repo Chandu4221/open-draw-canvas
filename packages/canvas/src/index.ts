@@ -282,6 +282,7 @@ export {
   documentToSvg,
   shapeToSvg,
   fallbackShapeToSvg,
+  escapeXml,
   resolveShapeFill,
   type ResolvedFill,
   RENDER_STYLES,

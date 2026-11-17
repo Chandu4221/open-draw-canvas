@@ -61,6 +61,7 @@ export interface PointerBindingContext {
         },
       ) => boolean | void)
     | undefined;
+  readonly onError?: ((error: unknown) => void) | undefined;
 }
 
 export function attachPointerListeners(
@@ -431,54 +432,58 @@ export function attachPointerListeners(
       worldPoint: commitWorld,
     });
 
-    if (hasPassedDragThreshold) {
-      if (before === STATES.draggingShape && gesture.shapeIds.length > 0) {
-        commitDragGesture(doc, gesture, commitWorld, execute, ctx.nestingMode, (kind) =>
-          canvas.hasCapability(kind, CAPABILITIES.container),
-        );
-      } else if (before === STATES.resizingShape) {
-        commitResizeGesture(doc, canvas, gesture, commitWorld, execute);
-      } else if (before === STATES.drawingShape) {
-        commitDrawGesture(
-          doc,
-          canvas,
-          gesture,
-          commitWorld,
-          tool,
-          execute,
-          ctx.nestingMode,
-          ctx.nextShapeId,
-        );
-        setTool(TOOLS.select);
-      } else if (before === STATES.selecting || gesture.kind === GESTURE_KINDS.select) {
-        const marqueeBox = normalizeBox(gesture.startWorld, world);
-        if (marqueeBox.width > 2 || marqueeBox.height > 2) {
-          const picked = canvas.pickShapesInBox(doc, marqueeBox);
-          if (event.shiftKey) {
-            canvas.selectMany(Array.from(new Set([...canvas.getSelectedIds(), ...picked])));
-          } else {
-            canvas.selectMany(picked);
+    try {
+      if (hasPassedDragThreshold) {
+        if (before === STATES.draggingShape && gesture.shapeIds.length > 0) {
+          commitDragGesture(doc, gesture, commitWorld, execute, ctx.nestingMode, (kind) =>
+            canvas.hasCapability(kind, CAPABILITIES.container),
+          );
+        } else if (before === STATES.resizingShape) {
+          commitResizeGesture(doc, canvas, gesture, commitWorld, execute);
+        } else if (before === STATES.drawingShape) {
+          commitDrawGesture(
+            doc,
+            canvas,
+            gesture,
+            commitWorld,
+            tool,
+            execute,
+            ctx.nestingMode,
+            ctx.nextShapeId,
+          );
+          setTool(TOOLS.select);
+        } else if (before === STATES.selecting || gesture.kind === GESTURE_KINDS.select) {
+          const marqueeBox = normalizeBox(gesture.startWorld, world);
+          if (marqueeBox.width > 2 || marqueeBox.height > 2) {
+            const picked = canvas.pickShapesInBox(doc, marqueeBox);
+            if (event.shiftKey) {
+              canvas.selectMany(Array.from(new Set([...canvas.getSelectedIds(), ...picked])));
+            } else {
+              canvas.selectMany(picked);
+            }
+          } else if (!event.shiftKey) {
+            canvas.clearSelection();
           }
-        } else if (!event.shiftKey) {
+        }
+      } else {
+        if (before === STATES.drawingShape && tool === TOOLS.drawText) {
+          commitDrawGesture(
+            doc,
+            canvas,
+            gesture,
+            world,
+            tool,
+            execute,
+            ctx.nestingMode,
+            ctx.nextShapeId,
+          );
+          setTool(TOOLS.select);
+        } else if (before === STATES.idle && gesture.kind === GESTURE_KINDS.press) {
           canvas.clearSelection();
         }
       }
-    } else {
-      if (before === STATES.drawingShape && tool === TOOLS.drawText) {
-        commitDrawGesture(
-          doc,
-          canvas,
-          gesture,
-          world,
-          tool,
-          execute,
-          ctx.nestingMode,
-          ctx.nextShapeId,
-        );
-        setTool(TOOLS.select);
-      } else if (before === STATES.idle && gesture.kind === GESTURE_KINDS.press) {
-        canvas.clearSelection();
-      }
+    } catch (err) {
+      ctx.onError?.(err);
     }
 
     setGesture(null);

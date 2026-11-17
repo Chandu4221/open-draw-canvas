@@ -44,6 +44,8 @@ export interface KeyboardBindingContext {
   readonly nextShapeId: (doc?: Document) => ShapeId;
 }
 
+let activeFocusedInstanceId: string | null = null;
+
 export function attachKeyboardListeners(
   ctx: KeyboardBindingContext,
   signal?: AbortSignal,
@@ -60,6 +62,10 @@ export function attachKeyboardListeners(
     execute,
     render,
   } = ctx;
+
+  const markActive = (): void => {
+    activeFocusedInstanceId = canvas.getInstanceId() ?? null;
+  };
 
   let copySequence = 0;
   let clipboard: {
@@ -134,6 +140,17 @@ export function attachKeyboardListeners(
       (target as Node) !== ctx.svg
     ) {
       return;
+    }
+
+    const isGlobalTarget =
+      !target ||
+      target === (typeof window !== "undefined" ? (window as unknown as HTMLElement) : null) ||
+      target === (typeof document !== "undefined" ? document.body : null);
+    if (isGlobalTarget) {
+      const myInstanceId = canvas.getInstanceId();
+      if (activeFocusedInstanceId !== null && myInstanceId !== activeFocusedInstanceId) {
+        return;
+      }
     }
 
     const descriptor: KeyboardEventDescriptor = {
@@ -341,9 +358,8 @@ export function attachKeyboardListeners(
                   }
                 }
               } catch {
-                // Ignore non-open-draw clipboard text
+                // Ignore non-open-draw clipboard text without pasting stale local shapes
               }
-              fallbackToLocal();
             })
             .catch(() => {
               fallbackToLocal();
@@ -514,9 +530,28 @@ export function attachKeyboardListeners(
   const listenerOpts: AddEventListenerOptions | undefined = signal ? { signal } : undefined;
   window.addEventListener("keydown", onKeyDown, listenerOpts);
   window.addEventListener("keyup", onKeyUp, listenerOpts);
+  if (typeof ctx.container?.addEventListener === "function") {
+    ctx.container.addEventListener("pointerdown", markActive, listenerOpts);
+    ctx.container.addEventListener("focusin", markActive, listenerOpts);
+  }
+  if (typeof ctx.svg?.addEventListener === "function") {
+    ctx.svg.addEventListener("pointerdown", markActive, listenerOpts);
+    ctx.svg.addEventListener("focusin", markActive, listenerOpts);
+  }
 
   return () => {
     window.removeEventListener("keydown", onKeyDown);
     window.removeEventListener("keyup", onKeyUp);
+    if (typeof ctx.container?.removeEventListener === "function") {
+      ctx.container.removeEventListener("pointerdown", markActive);
+      ctx.container.removeEventListener("focusin", markActive);
+    }
+    if (typeof ctx.svg?.removeEventListener === "function") {
+      ctx.svg.removeEventListener("pointerdown", markActive);
+      ctx.svg.removeEventListener("focusin", markActive);
+    }
+    if (activeFocusedInstanceId === canvas.getInstanceId()) {
+      activeFocusedInstanceId = null;
+    }
   };
 }

@@ -95,7 +95,13 @@ export interface CanvasController {
   getActiveDeviceTypes(): Readonly<Record<ShapeId, DeviceType | undefined>>;
 }
 
+let defaultInstanceSeq = 0;
+
 export function createCanvas(options: CanvasOptions = {}): CanvasController {
+  const instanceId =
+    options.instanceId !== undefined && options.instanceId !== ""
+      ? options.instanceId
+      : `canvas-${++defaultInstanceSeq}`;
   let camera = clampCamera(options.camera ?? DEFAULT_CAMERA);
   let selection = options.selection ?? EMPTY_SELECTION;
   let activeDeviceType = options.activeDeviceType;
@@ -252,7 +258,7 @@ export function createCanvas(options: CanvasOptions = {}): CanvasController {
   }
 
   return {
-    getInstanceId: () => options.instanceId,
+    getInstanceId: () => instanceId,
     getCamera: () => camera,
     setCamera: (next) => {
       camera = clampCamera(next);

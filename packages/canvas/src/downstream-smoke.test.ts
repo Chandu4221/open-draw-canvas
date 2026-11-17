@@ -9,6 +9,7 @@ import {
   createDocument,
   createEditor,
   createRect,
+  escapeXml,
   parseDocument,
   parseShapeId,
   ROOT_ID,
@@ -197,6 +198,8 @@ describe("Downstream Package Packaging & Surface (ADR-0008, R-002, R-004)", () =
       const svg = editor.toSvg();
       expect(svg).toContain("<svg");
       expect(svg).toContain("<rect");
+
+      expect(escapeXml("<test>&\"'")).toBe("&lt;test&gt;&amp;&quot;&apos;");
 
       editor.destroy();
     } finally {

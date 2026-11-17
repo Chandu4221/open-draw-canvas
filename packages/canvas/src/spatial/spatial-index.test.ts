@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { parseShapeId } from "@open-draw/contracts";
 import { createDocument, createPage, createRect } from "@open-draw/document";
+import { createCanvas } from "../create-canvas";
 import {
   buildSpatialIndexFromDocument,
   computeEnclosingSpatialBox,
@@ -209,5 +210,28 @@ describe("findIncrementalSpatialChanges & updateSpatialIndexFromDocument", () =>
 
     expect(querySpatialIndexPoint(updatedIndex, { x: 20, y: 20 })).toHaveLength(1); // hits page only
     expect(querySpatialIndexPoint(updatedIndex, { x: 210, y: 210 })[0]?.id).toBe(rect1);
+  });
+
+  it("updates spatial index incrementally through canvas controller when shape moves", () => {
+    const pageId = parseShapeId("p1");
+    const rect1 = parseShapeId("r1");
+    const doc1 = createDocument([
+      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
+      createRect(rect1, { x: 10, y: 10, width: 50, height: 50 }, { parent: pageId }),
+    ]);
+
+    const canvas = createCanvas();
+    // Warm up spatial index
+    expect(canvas.pickShape(doc1, { x: 20, y: 20 })).toBe(rect1);
+
+    // Simulate moving rect1 to (200, 200)
+    const doc2 = createDocument([
+      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
+      createRect(rect1, { x: 200, y: 200, width: 50, height: 50 }, { parent: pageId }),
+    ]);
+
+    // Query with new doc without calling invalidateSpatialIndex
+    expect(canvas.pickShape(doc2, { x: 20, y: 20 })).toBe(pageId);
+    expect(canvas.pickShape(doc2, { x: 210, y: 210 })).toBe(rect1);
   });
 });

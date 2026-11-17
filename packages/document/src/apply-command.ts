@@ -87,16 +87,22 @@ export function applyCommandToMap(
       const previousParentId = shape.parentId;
       const previousBoundingBox = shape.boundingBox;
       const targetParentId = command.parentId ?? command.parent!;
+      const clampedBox = {
+        x: Math.max(-MAX_COORDINATE_BOUND, Math.min(MAX_COORDINATE_BOUND, command.boundingBox.x)),
+        y: Math.max(-MAX_COORDINATE_BOUND, Math.min(MAX_COORDINATE_BOUND, command.boundingBox.y)),
+        width: Math.min(MAX_COORDINATE_BOUND, Math.max(1, command.boundingBox.width)),
+        height: Math.min(MAX_COORDINATE_BOUND, Math.max(1, command.boundingBox.height)),
+      };
       if (
         previousParentId === targetParentId &&
-        previousBoundingBox.x === command.boundingBox.x &&
-        previousBoundingBox.y === command.boundingBox.y &&
-        previousBoundingBox.width === command.boundingBox.width &&
-        previousBoundingBox.height === command.boundingBox.height
+        previousBoundingBox.x === clampedBox.x &&
+        previousBoundingBox.y === clampedBox.y &&
+        previousBoundingBox.width === clampedBox.width &&
+        previousBoundingBox.height === clampedBox.height
       ) {
         return [];
       }
-      shapes[command.id] = { ...shape, parentId: targetParentId, boundingBox: command.boundingBox };
+      shapes[command.id] = { ...shape, parentId: targetParentId, boundingBox: clampedBox };
       return [
         {
           type: COMMANDS.reparentShape,

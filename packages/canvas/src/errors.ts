@@ -3,6 +3,7 @@ export const CANVAS_ERRORS = {
   duplicateRegistration: "duplicate-registration",
   invalidCapability: "invalid-capability",
   invalidRegistration: "invalid-registration",
+  unknownShapeKind: "unknown-shape-kind",
 } as const;
 
 export type CanvasErrorCode = keyof typeof CANVAS_ERRORS;

@@ -194,10 +194,18 @@ function parseShape(value: unknown): Shape {
     // Custom shape: preserve any extra non-base properties
     const extra: Record<string, unknown> = {};
     if (typeof value.customData === "object" && value.customData !== null) {
-      Object.assign(extra, value.customData);
+      for (const [k, v] of Object.entries(value.customData)) {
+        if (k === "__proto__" || k === "constructor" || k === "prototype") {
+          throw new DocumentError("invalidDocument", `forbidden customData key: ${k}`);
+        }
+        extra[k] = v;
+      }
     }
     for (const [k, v] of Object.entries(value)) {
       if (!BASE_SHAPE_KEY_SET.has(k) && k !== "customData") {
+        if (k === "__proto__" || k === "constructor" || k === "prototype") {
+          throw new DocumentError("invalidDocument", `forbidden property key: ${k}`);
+        }
         extra[k] = v;
       }
     }

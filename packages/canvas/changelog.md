@@ -16,12 +16,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Studio Boundary Purification (R-001, ADR-0001)**: Completely removed Studio-specific root-chip APIs (`visibleChipRootIds`, `setRootChipsVisible`, etc.) from canvas controller and purged `"chipId"` from reserved custom data keys.
-- **Multi-Editor Isolation (R-008, ADR-0008)**: Threaded `instanceId` into SVG `<clipPath>` IDs, defs, and clipboard copy namespacing to eliminate cross-editor collision when multiple canvas instances share a DOM tree; reset active gesture controllers on undo/redo.
+- **Studio Boundary Purification (R-001, ADR-0001)**: Completely removed Studio-specific root-chip APIs (`visibleChipRootIds`, `setRootChipsVisible`, etc.) from canvas controller and purged `"chipId"` from reserved custom data keys; deprecated `setShapeOrder` in favor of visual z-ordering.
+- **Safe Multi-Editor Isolation by Default (R-008, ADR-0008)**: Auto-generates instance IDs when omitted, scopes shape ID generator seeds per instance, and isolates global keyboard shortcuts to the active focused editor.
+- **Pen Gesture Decimation & Error Boundary**: Downsamples points exceeding `MAX_PEN_PATH_POINTS` during gestures, and routes gesture commit exceptions through optional `onError` callback without crashing DOM event listeners.
+- **Stale Paste Prevention & External Clipboard Safety (R-006, P1-8)**: Prevents falling back to stale in-memory clipboard data when system clipboard contains external non-OpenDraw content.
+- **Coordinate Bounds Enforcement Across Gestures**: Clamped world coordinates and relative bounds across draw and reparent gesture pipelines.
 - **FSM Exhaustiveness & Resiliency (R-006, ADR-0008)**: Guaranteed finite state machine transitions fallback cleanly to current state on unhandled events, preventing undefined transitions.
 - **Snap Solver Allocation Overhead**: Cached shape child hierarchy during active gestures, eliminating full tree allocations on every 60fps pointermove event.
 - **Incremental Spatial Index Updates (ADR-0011, R-016)**: Bypassed unconditional spatial index invalidations on pure non-structural moves/resizes, enabling sub-millisecond STR spatial index updates.
 - **TypeScript NodeNext Dual Declaration Packaging (ADR-0003)**: Properly mapped `./dist/index.d.ts` for ESM and `./dist/index.d.cts` for CommonJS in package exports.
+- **Hygiene & Security Guards**: Re-exported `escapeXml` from `@open-draw/renderer-svg`, added prototype pollution guards to `customData`, and fail loudly with typed `CanvasError` on unregistered custom shape insertion.
 
 ## [0.9.4] - 2026-11-16
 

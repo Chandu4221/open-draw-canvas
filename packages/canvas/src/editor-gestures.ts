@@ -1,7 +1,13 @@
 // Gesture commit logic for standalone editor (R-004, R-008, R-018).
 // Translates pointer completion into typed document commands.
 import type { BoundingBox, Point, ShapeId } from "@open-draw/contracts";
-import { CAPABILITIES, isRootId, ROOT_ID } from "@open-draw/contracts";
+import {
+  CAPABILITIES,
+  isRootId,
+  MAX_COORDINATE_BOUND,
+  MAX_PEN_PATH_POINTS,
+  ROOT_ID,
+} from "@open-draw/contracts";
 import type { SnapGuide } from "./snap-solver";
 import {
   absoluteBoundingBox,
@@ -34,8 +40,25 @@ export interface ShapeIdSequence {
   readonly seed: (doc: Document) => void;
 }
 
-export function createShapeIdGenerator(initialDoc?: Document): ShapeIdSequence {
-  let seq = 0x7a00;
+function seedFromInstance(instanceSeed?: number | string): number {
+  if (typeof instanceSeed === "number" && Number.isFinite(instanceSeed)) {
+    return Math.abs(Math.floor(instanceSeed)) % 0x1000;
+  }
+  if (typeof instanceSeed === "string" && instanceSeed.length > 0) {
+    let hash = 0;
+    for (let i = 0; i < instanceSeed.length; i++) {
+      hash = (hash * 31 + instanceSeed.charCodeAt(i)) >>> 0;
+    }
+    return hash % 0x1000 || 1;
+  }
+  return 0;
+}
+
+export function createShapeIdGenerator(
+  initialDoc?: Document,
+  instanceSeed?: number | string,
+): ShapeIdSequence {
+  let seq = 0x7a00 + seedFromInstance(instanceSeed) * 0x1000;
   const seed = (doc: Document): void => {
     for (const shapeId of Object.keys(doc.shapes)) {
       const match = /^s-([0-9a-fA-F]+)$/.exec(shapeId);
@@ -203,6 +226,32 @@ export function commitResizeGesture(
   if (commands.length > 0) execute(commands);
 }
 
+function clampCoord(n: number): number {
+  return Math.max(-MAX_COORDINATE_BOUND, Math.min(MAX_COORDINATE_BOUND, n));
+}
+
+function clampBox(b: BoundingBox): BoundingBox {
+  const x = clampCoord(b.x);
+  const y = clampCoord(b.y);
+  return {
+    x,
+    y,
+    width: Math.max(1, Math.min(MAX_COORDINATE_BOUND, b.width)),
+    height: Math.max(1, Math.min(MAX_COORDINATE_BOUND, b.height)),
+  };
+}
+
+export function downsamplePoints(points: readonly Point[], maxPoints: number): Point[] {
+  if (points.length <= maxPoints) return [...points];
+  const result: Point[] = [];
+  const step = (points.length - 1) / (maxPoints - 1);
+  for (let i = 0; i < maxPoints; i++) {
+    const index = Math.min(Math.round(i * step), points.length - 1);
+    result.push(points[index]!);
+  }
+  return result;
+}
+
 export function commitDrawGesture(
   doc: Document,
   canvas: CanvasController,
@@ -227,14 +276,14 @@ export function commitDrawGesture(
     const { boundingBox, start, end } = deriveLineBoundingBox(gesture.startWorld, world);
     const line = createLine(
       idGen(doc),
-      {
+      clampBox({
         x: boundingBox.x - parentBox.x,
         y: boundingBox.y - parentBox.y,
         width: boundingBox.width,
         height: boundingBox.height,
-      },
-      start,
-      end,
+      }),
+      { x: clampCoord(start.x), y: clampCoord(start.y) },
+      { x: clampCoord(end.x), y: clampCoord(end.y) },
       { parent: targetParentId },
     );
     execute([{ type: COMMANDS.createShape, shape: line }]);
@@ -243,17 +292,24 @@ export function commitDrawGesture(
   }
 
   if (tool === TOOLS.drawPenPath) {
-    const allPoints = gesture.points.length > 0 ? gesture.points : [gesture.startWorld, world];
+    let allPoints = gesture.points.length > 0 ? gesture.points : [gesture.startWorld, world];
+    if (allPoints.length > MAX_PEN_PATH_POINTS) {
+      allPoints = downsamplePoints(allPoints, MAX_PEN_PATH_POINTS);
+    }
     const { boundingBox, points } = derivePenPathBoundingBox(allPoints);
+    const clampedPoints = points.map((p) => ({
+      x: clampCoord(p.x),
+      y: clampCoord(p.y),
+    }));
     const pen = createPenPath(
       idGen(doc),
-      {
+      clampBox({
         x: boundingBox.x - parentBox.x,
         y: boundingBox.y - parentBox.y,
         width: boundingBox.width,
         height: boundingBox.height,
-      },
-      points,
+      }),
+      clampedPoints,
       { parent: targetParentId },
     );
     execute([{ type: COMMANDS.createShape, shape: pen }]);
@@ -264,12 +320,12 @@ export function commitDrawGesture(
   if (tool === TOOLS.drawText) {
     const textShape = createText(
       idGen(doc),
-      {
+      clampBox({
         x: gesture.startWorld.x - parentBox.x,
         y: gesture.startWorld.y - parentBox.y,
         width: DEFAULT_TEXT_SHAPE_DIMENSIONS.width,
         height: DEFAULT_TEXT_SHAPE_DIMENSIONS.height,
-      },
+      }),
       { parentId: targetParentId },
     );
     execute([{ type: COMMANDS.createShape, shape: textShape }]);
@@ -278,12 +334,12 @@ export function commitDrawGesture(
   }
 
   const box = normalizeBox(gesture.startWorld, world);
-  const localBox: BoundingBox = {
+  const localBox: BoundingBox = clampBox({
     x: box.x - parentBox.x,
     y: box.y - parentBox.y,
     width: box.width,
     height: box.height,
-  };
+  });
   const shape: RectShape | EllipseShape =
     tool === TOOLS.drawEllipse
       ? createEllipse(idGen(doc), localBox, { parent: targetParentId })

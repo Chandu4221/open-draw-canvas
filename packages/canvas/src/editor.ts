@@ -37,6 +37,7 @@ import { cameraToViewportBox, DEFAULT_CAMERA } from "./camera";
 import { createCanvas } from "./create-canvas";
 import { querySpatialIndexBox } from "./spatial/spatial-index";
 import { CONTROLLER_EVENTS } from "./events";
+import { CanvasError } from "./errors";
 import { TOOLS, type ToolId } from "./tools";
 import { type ActiveGesture, createShapeIdGenerator } from "./editor-gestures";
 import { computeEditorOverlays } from "./editor-overlays";
@@ -69,13 +70,11 @@ function isPropertyMutationCommand(cmd: Command): boolean {
   );
 }
 
-function isGeometryMutationCommand(cmd: Command): boolean {
+function isStructuralMutationCommand(cmd: Command): boolean {
   return (
     cmd.type === COMMANDS.createShape ||
     cmd.type === COMMANDS.deleteShape ||
     cmd.type === COMMANDS.reparentShape ||
-    cmd.type === COMMANDS.moveShapes ||
-    cmd.type === COMMANDS.setShapeBoundingBox ||
     cmd.type === COMMANDS.duplicateShapes ||
     cmd.type === COMMANDS.reorderShapes
   );
@@ -87,7 +86,7 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     ...(options.instanceId !== undefined ? { instanceId: options.instanceId } : {}),
   });
   let doc = options.document ?? createDocument([]);
-  const idSequence = createShapeIdGenerator(doc);
+  const idSequence = createShapeIdGenerator(doc, canvas.getInstanceId());
   let history: HistoryState = EMPTY_HISTORY;
   let activeTool: ToolId = options.tool ?? TOOLS.select;
   let gesture: ActiveGesture | null = null;
@@ -323,8 +322,8 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     if (result.document === doc && result.inverse.length === 0) {
       return;
     }
-    const hasGeometryChange = cmds.some(isGeometryMutationCommand);
-    if (hasGeometryChange) {
+    const hasStructuralChange = cmds.some(isStructuralMutationCommand);
+    if (hasStructuralChange) {
       canvas.invalidateSpatialIndex();
     }
     const isAllPropertyMutations = cmds.every(isPropertyMutationCommand);
@@ -398,6 +397,7 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
         options.onDoubleClick?.(hitId);
       },
       snapConfig: options.snapping,
+      onError: options.onError,
     },
     abortSignal,
   );
@@ -644,21 +644,15 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
       opts?: CustomShapeCreateOptions,
     ): Shape => {
       const ext = customShapeRegistry[kind];
+      if (!ext) {
+        throw new CanvasError(
+          "unknownShapeKind",
+          `cannot insert unregistered custom shape kind: ${kind}`,
+        );
+      }
       const shapeId = idSequence.nextShapeId(doc);
-      const shape = ext
-        ? createDefaultCustomShape(ext, shapeId, box, opts)
-        : createDefaultCustomShape(
-            {
-              kind,
-              label: kind,
-              capabilities: [],
-              render: () => "",
-            },
-            shapeId,
-            box,
-            opts,
-          );
-      if (ext?.validate) {
+      const shape = createDefaultCustomShape(ext, shapeId, box, opts);
+      if (ext.validate) {
         ext.validate(shape);
       }
       execute([{ type: COMMANDS.createShape, shape }]);

@@ -53,6 +53,7 @@ export interface EditorOptions {
     | undefined;
   readonly onFallback?: (message: string) => void;
   readonly onDoubleClick?: ((shapeId: ShapeId) => void) | undefined;
+  readonly onError?: ((error: unknown) => void) | undefined;
 }
 
 export interface SetDocumentOptions {
@@ -78,6 +79,10 @@ export interface Editor {
       readonly fillStyle?: FillStyle | null | undefined;
     },
   ): void;
+  /**
+   * @deprecated Use `reorderShapes`, `bringToFront`, `sendToBack`, `bringForward`, or `sendBackward` for visual z-ordering.
+   * `setShapeOrder` only mutates device-specific reading order metadata (`meta.order`) and does not affect canvas visual rendering.
+   */
   setShapeOrder(id: ShapeId, deviceType: DeviceType, order: number | null): void;
   setShapePluginData(id: ShapeId, pluginId: PluginId, data: unknown | null): void;
   bringToFront(ids?: readonly ShapeId[]): void;

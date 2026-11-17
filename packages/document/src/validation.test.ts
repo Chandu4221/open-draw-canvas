@@ -459,5 +459,23 @@ describe("parseDocument", () => {
       };
       expect(() => parseDocument(hostileDoc)).toThrowError(/invalidMeta/);
     });
+
+    it("rejects __proto__ and constructor property injection in customData", () => {
+      const hostileCustomData = JSON.parse('{"valid":123, "__proto__":{"polluted":true}}');
+      const hostileDoc = {
+        schema: { version: 1 },
+        shapes: {
+          "custom-proto": {
+            id: "custom-proto",
+            kind: "vendor:custom",
+            parentId: ROOT_ID,
+            boundingBox: { x: 0, y: 0, width: 100, height: 100 },
+            customData: hostileCustomData,
+            meta: { order: {} },
+          },
+        },
+      };
+      expect(() => parseDocument(hostileDoc)).toThrowError(/invalidDocument/);
+    });
   });
 });

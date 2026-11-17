@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   MAX_DOCUMENT_DEPTH,
+  MAX_PEN_PATH_POINTS,
   parseCustomShapeKind,
   parseShapeId,
   ROOT_ID,
@@ -554,6 +555,167 @@ describe("Battle Hardening (ADR-0008, ADR-0011, R-006, R-016, R-039)", () => {
       expect(shapeListInOrder(ed.getDocument()).map((s) => s.id)).toEqual([s1, s2, s3]);
 
       ed.destroy();
+    });
+
+    it("handles long-stroke pen gesture: >2000 points does not crash on commit and respects envelope limit (P0-3 regression fix)", () => {
+      const ed = createEditor(container as unknown as HTMLElement);
+      ed.setTool(TOOLS.drawPenPath);
+
+      const mockSvg = ed.svg as unknown as {
+        dispatch: (event: string, data: unknown) => void;
+      };
+
+      mockSvg.dispatch("pointerdown", {
+        button: 0,
+        pointerId: 1,
+        clientX: 10,
+        clientY: 10,
+        preventDefault: () => {},
+      });
+
+      // Dispatch 2500 move events
+      for (let i = 1; i <= 2500; i++) {
+        mockSvg.dispatch("pointermove", {
+          pointerId: 1,
+          clientX: 10 + i * 0.1,
+          clientY: 10 + (i % 2) * 2,
+          preventDefault: () => {},
+        });
+      }
+
+      // Pointerup should commit without throwing
+      expect(() => {
+        mockSvg.dispatch("pointerup", {
+          pointerId: 1,
+          clientX: 260,
+          clientY: 10,
+        });
+      }).not.toThrow();
+
+      const shapes = Object.values(ed.getDocument().shapes).filter((s) => s.parentId === ROOT_ID);
+      expect(shapes.length).toBe(1);
+      const penShape = shapes[0] as unknown as { kind: string; points: unknown[] };
+      expect(penShape.kind).toBe("pen-path");
+      expect(penShape.points.length).toBeLessThanOrEqual(MAX_PEN_PATH_POINTS);
+      expect(penShape.points.length).toBeGreaterThan(0);
+
+      ed.destroy();
+    });
+
+    it("provides safe multi-editor defaults without manual options (P1-4)", () => {
+      const c1 = new MockDomNode("div") as unknown as HTMLElement;
+      const c2 = new MockDomNode("div") as unknown as HTMLElement;
+      const ed1 = createEditor(c1);
+      const ed2 = createEditor(c2);
+
+      // Disjoint auto-generated instanceIds
+      const id1 = ed1.canvas.getInstanceId();
+      const id2 = ed2.canvas.getInstanceId();
+      expect(typeof id1).toBe("string");
+      expect(typeof id2).toBe("string");
+      expect(id1).not.toBe("");
+      expect(id2).not.toBe("");
+      expect(id1).not.toBe(id2);
+
+      // Disjoint shape IDs on insert
+      ed1.registerCustomShape({
+        kind: parseCustomShapeKind("custom:test"),
+        label: "Test",
+        capabilities: [],
+        render: () => "<rect />",
+      });
+      ed2.registerCustomShape({
+        kind: parseCustomShapeKind("custom:test"),
+        label: "Test",
+        capabilities: [],
+        render: () => "<rect />",
+      });
+
+      const s1 = ed1.insertCustomShape(parseCustomShapeKind("custom:test"), {
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 10,
+      });
+      const s2 = ed2.insertCustomShape(parseCustomShapeKind("custom:test"), {
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 10,
+      });
+      expect(s1.id).not.toBe(s2.id);
+
+      ed1.destroy();
+      ed2.destroy();
+    });
+
+    it("does not paste stale in-memory shapes when system clipboard contains non-OpenDraw text (P1-8)", async () => {
+      let clipboardText = "";
+      const origDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+      Object.defineProperty(globalThis, "navigator", {
+        value: {
+          clipboard: {
+            writeText: async (text: string) => {
+              clipboardText = text;
+            },
+            readText: async () => clipboardText,
+          },
+        },
+        configurable: true,
+        writable: true,
+      });
+
+      try {
+        const shape = createRect(parseShapeId("rect-to-copy"), {
+          x: 10,
+          y: 10,
+          width: 50,
+          height: 50,
+        });
+        const ed = createEditor(container as unknown as HTMLElement, {
+          document: createDocument([shape]),
+        });
+        ed.select(shape.id);
+
+        const mockWin = (
+          globalThis as unknown as { window: { dispatch: (evt: string, arg: unknown) => void } }
+        ).window;
+
+        // 1. Copy locally
+        mockWin.dispatch("keydown", {
+          code: "KeyC",
+          key: "c",
+          ctrlKey: true,
+          preventDefault: () => {},
+        });
+        expect(clipboardText).toContain("rect-to-copy");
+
+        // 2. User copies arbitrary plain text in another app
+        clipboardText = "https://example.com/some/article";
+
+        // 3. User pastes into editor
+        mockWin.dispatch("keydown", {
+          code: "KeyV",
+          key: "v",
+          ctrlKey: true,
+          preventDefault: () => {},
+        });
+
+        await new Promise((r) => setTimeout(r, 10));
+
+        // Document should still only contain the original shape, not stale copied rect
+        const shapes = Object.values(ed.getDocument().shapes).filter((s) => s.parentId === ROOT_ID);
+        expect(shapes).toHaveLength(1);
+        expect(shapes[0]?.id).toBe(shape.id);
+
+        ed.destroy();
+      } finally {
+        if (origDescriptor) {
+          Object.defineProperty(globalThis, "navigator", origDescriptor);
+        } else {
+          delete (globalThis as unknown as { navigator?: unknown }).navigator;
+        }
+      }
     });
   });
 });

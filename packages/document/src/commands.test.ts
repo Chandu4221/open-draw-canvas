@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { DEVICE_TYPES, FILL_STYLES, parseShapeId, STYLE_PROFILES } from "@open-draw/contracts";
+import {
+  DEVICE_TYPES,
+  FILL_STYLES,
+  MAX_COORDINATE_BOUND,
+  parseShapeId,
+  ROOT_ID,
+  STYLE_PROFILES,
+} from "@open-draw/contracts";
 import {
   applyTransaction,
   COMMANDS,
@@ -416,6 +423,35 @@ describe("document commands (milestone 05)", () => {
       const undone = applyTransaction(resized.document, createTransaction(resized.inverse));
       const restoredPen = undone.document.shapes[penId] as typeof penShape;
       expect(restoredPen.points).toEqual(originalPoints);
+    });
+
+    it("clamps reparent bounding box within MAX_COORDINATE_BOUND", () => {
+      const rectId = parseShapeId("rect-clamp");
+      const doc = createDocument([
+        createPage(pageId, { x: 0, y: 0, width: 1000, height: 1000 }),
+        createRect(rectId, { x: 10, y: 10, width: 50, height: 50 }, { parent: pageId }),
+      ]);
+      const res = applyTransaction(
+        doc,
+        createTransaction([
+          {
+            type: COMMANDS.reparentShape,
+            id: rectId,
+            parentId: ROOT_ID,
+            boundingBox: { x: 200_000, y: -200_000, width: 50, height: 50 },
+          },
+        ]),
+      );
+      const reparented = res.document.shapes[rectId]!;
+      expect(reparented.boundingBox.x).toBe(MAX_COORDINATE_BOUND);
+      expect(reparented.boundingBox.y).toBe(-MAX_COORDINATE_BOUND);
+      const undone = applyTransaction(res.document, createTransaction(res.inverse));
+      expect(undone.document.shapes[rectId]!.boundingBox).toEqual({
+        x: 10,
+        y: 10,
+        width: 50,
+        height: 50,
+      });
     });
   });
 });
