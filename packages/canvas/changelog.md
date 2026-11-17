@@ -5,6 +5,24 @@ All notable changes to the `@open-draw/canvas` package are documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.5] - 2026-11-17
+
+### Added
+
+- **First-Class Z-Ordering System (R-005, R-015, R-016)**: Added `ReorderShapes` command to document core with lossless exact inverse permutations for `bringToFront`, `sendToBack`, `bringForward`, `sendBackward`, and arbitrary `setOrder`. Exposed public methods on `Editor` (`bringToFront`, `sendToBack`, `bringForward`, `sendBackward`), registered action IDs in `@open-draw/input`, and bound default keyboard shortcuts (`Ctrl+]`, `Ctrl+[`, `Ctrl+Shift+]`, `Ctrl+Shift+[`).
+- **Decoupled Container Capability (R-005, ADR-0002)**: Added `CAPABILITIES.container` ("container") to contracts and decoupled shape reparenting and drag/draw drop targets from application-specific metadata.
+- **Envelope Limits & Prototype Pollution Defense (R-004, R-006)**: Added `MAX_DOCUMENT_SHAPE_COUNT` (10,000), `MAX_PEN_PATH_POINTS` (2,000), and `MAX_DOCUMENT_BYTE_SIZE` (10MB) envelope limits with typed error factories (`documentShapeCountExceeded`, `documentSizeExceeded`). Enforced prototype pollution guards (`"__proto__"`, `"constructor"`) and coordinate bounds clamping (`MAX_COORDINATE_BOUND`).
+- **Lossless Freehand & Line Scaling**: Preserved original point distributions (`pointsSnapshot`) in `setShapeBoundingBox` commands for pen-path and line geometries across scaling and undo/redo cycles.
+
+### Fixed
+
+- **Studio Boundary Purification (R-001, ADR-0001)**: Completely removed Studio-specific root-chip APIs (`visibleChipRootIds`, `setRootChipsVisible`, etc.) from canvas controller and purged `"chipId"` from reserved custom data keys.
+- **Multi-Editor Isolation (R-008, ADR-0008)**: Threaded `instanceId` into SVG `<clipPath>` IDs, defs, and clipboard copy namespacing to eliminate cross-editor collision when multiple canvas instances share a DOM tree; reset active gesture controllers on undo/redo.
+- **FSM Exhaustiveness & Resiliency (R-006, ADR-0008)**: Guaranteed finite state machine transitions fallback cleanly to current state on unhandled events, preventing undefined transitions.
+- **Snap Solver Allocation Overhead**: Cached shape child hierarchy during active gestures, eliminating full tree allocations on every 60fps pointermove event.
+- **Incremental Spatial Index Updates (ADR-0011, R-016)**: Bypassed unconditional spatial index invalidations on pure non-structural moves/resizes, enabling sub-millisecond STR spatial index updates.
+- **TypeScript NodeNext Dual Declaration Packaging (ADR-0003)**: Properly mapped `./dist/index.d.ts` for ESM and `./dist/index.d.cts` for CommonJS in package exports.
+
 ## [0.9.4] - 2026-11-16
 
 ### Added
