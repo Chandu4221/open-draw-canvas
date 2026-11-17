@@ -36,7 +36,7 @@ export { applySetShapeHiddenOn } from "./set-shape-hidden-on";
 export type { SetShapeOrder } from "./set-shape-order";
 export { applySetShapeOrder } from "./set-shape-order";
 export type { SetShapeStyle } from "./set-shape-style";
-export { applySetShapeStyle } from "./set-shape-style";
+export { applySetShapeStyle, applySetShapeStyleToMap } from "./set-shape-style";
 export type { SetShapeContent } from "./set-shape-content";
 export { applySetShapeContent } from "./set-shape-content";
 export type { DuplicateShapes } from "./duplicate-shapes";

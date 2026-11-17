@@ -318,30 +318,38 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     if (isDestroyed) return;
     const cmds = Array.isArray(commands) ? commands : [commands];
     if (cmds.length === 0) return;
-    const result = applyTransaction(doc, createTransaction(cmds));
-    if (result.document === doc && result.inverse.length === 0) {
-      return;
-    }
-    const hasStructuralChange = cmds.some(isStructuralMutationCommand);
-    if (hasStructuralChange) {
-      canvas.invalidateSpatialIndex();
-    }
-    const isAllPropertyMutations = cmds.every(isPropertyMutationCommand);
-    const affectedShapeIds = isAllPropertyMutations
-      ? new Set((cmds as Array<{ id: ShapeId }>).map((c) => c.id))
-      : undefined;
-
-    canvas.batch(() => {
-      doc = result.document;
-      reconcileSelection();
-      if (opts?.record !== false && result.inverse.length > 0) {
-        history = recordHistory(history, result.inverse);
-        canvas.emit(CONTROLLER_EVENTS.historyChanged);
+    try {
+      const result = applyTransaction(doc, createTransaction(cmds));
+      if (result.document === doc && result.inverse.length === 0) {
+        return;
       }
-      canvas.emit(CONTROLLER_EVENTS.documentChanged);
-    });
-    renderDocument(false, affectedShapeIds);
-    renderOverlays();
+      const hasStructuralChange = cmds.some(isStructuralMutationCommand);
+      if (hasStructuralChange) {
+        canvas.invalidateSpatialIndex();
+      }
+      const isAllPropertyMutations = cmds.every(isPropertyMutationCommand);
+      const affectedShapeIds = isAllPropertyMutations
+        ? new Set((cmds as Array<{ id: ShapeId }>).map((c) => c.id))
+        : undefined;
+
+      canvas.batch(() => {
+        doc = result.document;
+        reconcileSelection();
+        if (opts?.record !== false && result.inverse.length > 0) {
+          history = recordHistory(history, result.inverse);
+          canvas.emit(CONTROLLER_EVENTS.historyChanged);
+        }
+        canvas.emit(CONTROLLER_EVENTS.documentChanged);
+      });
+      renderDocument(false, affectedShapeIds);
+      renderOverlays();
+    } catch (err) {
+      if (options.onError) {
+        options.onError(err);
+      } else {
+        throw err;
+      }
+    }
   }
 
   function onWheel(event: WheelEvent): void {
@@ -434,6 +442,7 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
       execute: (cmds) => execute(cmds),
       render: () => renderOverlays(),
       nextShapeId: idSequence.nextShapeId,
+      onError: options.onError,
     },
     abortSignal,
   );
@@ -613,8 +622,6 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     select: (id) => {
       if (doc.shapes[id] !== undefined) {
         canvas.select(id);
-      } else {
-        canvas.clearSelection();
       }
     },
     selectMany: (ids) => {

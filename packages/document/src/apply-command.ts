@@ -8,6 +8,7 @@ import type { CreateShape } from "./commands/create-shape";
 import type { ShapeScaleHook } from "./commands/set-shape-bounding-box";
 import { deriveDeterministicId } from "./commands/duplicate-shapes";
 import { applyReorderShapesToMap } from "./commands/reorder-shapes";
+import { applySetShapeStyleToMap } from "./commands/set-shape-style";
 import type { Document } from "./document";
 import { SCHEMA_VERSION } from "./document";
 import { DocumentError } from "./errors";
@@ -15,7 +16,6 @@ import { pruneSelectedDescendants } from "./reparent";
 import { isCustomShape, type LineShape, type PenPathShape, type Shape } from "./shape";
 import { subtreeOf } from "./tree";
 import { parseShape } from "./validation";
-import { parseColor, parseFillStyle, parseStrokeWidth } from "./style-validation";
 
 function areHiddenOnEqual(
   a: readonly DeviceType[] | undefined | null,
@@ -345,90 +345,7 @@ export function applyCommandToMap(
     }
 
     case COMMANDS.setShapeStyle: {
-      const shape = shapes[command.id];
-      if (shape === undefined) {
-        throw new DocumentError("shapeNotFound", `no shape with id: ${command.id}`);
-      }
-      const previousFill = shape.fill === undefined ? null : shape.fill;
-      const previousStroke = shape.stroke === undefined ? null : shape.stroke;
-      const previousStrokeWidth = shape.strokeWidth === undefined ? null : shape.strokeWidth;
-      const previousFillStyle = shape.fillStyle === undefined ? null : shape.fillStyle;
-
-      const targetFill =
-        command.fill === undefined
-          ? shape.fill
-          : command.fill === null
-            ? undefined
-            : parseColor(command.fill, "fill");
-      const targetStroke =
-        command.stroke === undefined
-          ? shape.stroke
-          : command.stroke === null
-            ? undefined
-            : parseColor(command.stroke, "stroke");
-      const targetStrokeWidth =
-        command.strokeWidth === undefined
-          ? shape.strokeWidth
-          : command.strokeWidth === null
-            ? undefined
-            : parseStrokeWidth(command.strokeWidth);
-      const targetFillStyle =
-        command.fillStyle === undefined
-          ? shape.fillStyle
-          : command.fillStyle === null
-            ? undefined
-            : parseFillStyle(command.fillStyle);
-
-      if (
-        shape.fill === targetFill &&
-        shape.stroke === targetStroke &&
-        shape.strokeWidth === targetStrokeWidth &&
-        shape.fillStyle === targetFillStyle
-      ) {
-        return [];
-      }
-
-      const nextShapeData: Record<string, unknown> = { ...shape };
-      if (command.fill !== undefined) {
-        if (targetFill === undefined) {
-          delete nextShapeData.fill;
-        } else {
-          nextShapeData.fill = targetFill;
-        }
-      }
-      if (command.stroke !== undefined) {
-        if (targetStroke === undefined) {
-          delete nextShapeData.stroke;
-        } else {
-          nextShapeData.stroke = targetStroke;
-        }
-      }
-      if (command.strokeWidth !== undefined) {
-        if (targetStrokeWidth === undefined) {
-          delete nextShapeData.strokeWidth;
-        } else {
-          nextShapeData.strokeWidth = targetStrokeWidth;
-        }
-      }
-      if (command.fillStyle !== undefined) {
-        if (targetFillStyle === undefined) {
-          delete nextShapeData.fillStyle;
-        } else {
-          nextShapeData.fillStyle = targetFillStyle;
-        }
-      }
-
-      shapes[command.id] = nextShapeData as unknown as Shape;
-      return [
-        {
-          type: COMMANDS.setShapeStyle,
-          id: command.id,
-          fill: previousFill,
-          stroke: previousStroke,
-          strokeWidth: previousStrokeWidth,
-          fillStyle: previousFillStyle,
-        },
-      ];
+      return applySetShapeStyleToMap(shapes, command);
     }
 
     case COMMANDS.setShapeContent: {

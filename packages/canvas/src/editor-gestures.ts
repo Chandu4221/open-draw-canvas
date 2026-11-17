@@ -262,9 +262,17 @@ export function commitDrawGesture(
   nestingMode: NestingMode = "containers-only",
   idGen: ShapeIdGenerator = (doc?: Document) => createShapeIdGenerator(doc).nextShapeId(doc),
 ): void {
+  const startWorld = {
+    x: clampCoord(gesture.startWorld.x),
+    y: clampCoord(gesture.startWorld.y),
+  };
+  const worldPoint = {
+    x: clampCoord(world.x),
+    y: clampCoord(world.y),
+  };
   const targetParentId =
     nestingMode === "containers-only"
-      ? pickDropTarget(doc, gesture.startWorld, [], (kind) =>
+      ? pickDropTarget(doc, startWorld, [], (kind) =>
           canvas.hasCapability(kind, CAPABILITIES.container),
         )
       : ROOT_ID;
@@ -273,7 +281,7 @@ export function commitDrawGesture(
     targetParent !== undefined ? absoluteBoundingBox(doc, targetParent) : { x: 0, y: 0 };
 
   if (tool === TOOLS.drawLine) {
-    const { boundingBox, start, end } = deriveLineBoundingBox(gesture.startWorld, world);
+    const { boundingBox, start, end } = deriveLineBoundingBox(startWorld, worldPoint);
     const line = createLine(
       idGen(doc),
       clampBox({
@@ -292,15 +300,15 @@ export function commitDrawGesture(
   }
 
   if (tool === TOOLS.drawPenPath) {
-    let allPoints = gesture.points.length > 0 ? gesture.points : [gesture.startWorld, world];
+    let allPoints = gesture.points.length > 0 ? gesture.points : [startWorld, worldPoint];
     if (allPoints.length > MAX_PEN_PATH_POINTS) {
       allPoints = downsamplePoints(allPoints, MAX_PEN_PATH_POINTS);
     }
-    const { boundingBox, points } = derivePenPathBoundingBox(allPoints);
-    const clampedPoints = points.map((p) => ({
+    const clampedPoints = allPoints.map((p) => ({
       x: clampCoord(p.x),
       y: clampCoord(p.y),
     }));
+    const { boundingBox, points } = derivePenPathBoundingBox(clampedPoints);
     const pen = createPenPath(
       idGen(doc),
       clampBox({
@@ -309,7 +317,7 @@ export function commitDrawGesture(
         width: boundingBox.width,
         height: boundingBox.height,
       }),
-      clampedPoints,
+      points.map((p) => ({ x: clampCoord(p.x), y: clampCoord(p.y) })),
       { parent: targetParentId },
     );
     execute([{ type: COMMANDS.createShape, shape: pen }]);
@@ -321,8 +329,8 @@ export function commitDrawGesture(
     const textShape = createText(
       idGen(doc),
       clampBox({
-        x: gesture.startWorld.x - parentBox.x,
-        y: gesture.startWorld.y - parentBox.y,
+        x: startWorld.x - parentBox.x,
+        y: startWorld.y - parentBox.y,
         width: DEFAULT_TEXT_SHAPE_DIMENSIONS.width,
         height: DEFAULT_TEXT_SHAPE_DIMENSIONS.height,
       }),
@@ -333,7 +341,7 @@ export function commitDrawGesture(
     return;
   }
 
-  const box = normalizeBox(gesture.startWorld, world);
+  const box = normalizeBox(startWorld, worldPoint);
   const localBox: BoundingBox = clampBox({
     x: box.x - parentBox.x,
     y: box.y - parentBox.y,

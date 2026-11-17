@@ -42,6 +42,7 @@ export interface KeyboardBindingContext {
   readonly execute: (commands: readonly Command[]) => void;
   readonly render: () => void;
   readonly nextShapeId: (doc?: Document) => ShapeId;
+  readonly onError?: ((error: unknown) => void) | undefined;
 }
 
 let activeFocusedInstanceId: string | null = null;
@@ -527,9 +528,24 @@ export function attachKeyboardListeners(
     if (event.code === KEY_CODES.space) setSpacePressed(false);
   }
 
+  const safeKeyDown = (event: KeyboardEvent): void => {
+    try {
+      onKeyDown(event);
+    } catch (err) {
+      ctx.onError?.(err);
+    }
+  };
+  const safeKeyUp = (event: KeyboardEvent): void => {
+    try {
+      onKeyUp(event);
+    } catch (err) {
+      ctx.onError?.(err);
+    }
+  };
+
   const listenerOpts: AddEventListenerOptions | undefined = signal ? { signal } : undefined;
-  window.addEventListener("keydown", onKeyDown, listenerOpts);
-  window.addEventListener("keyup", onKeyUp, listenerOpts);
+  window.addEventListener("keydown", safeKeyDown, listenerOpts);
+  window.addEventListener("keyup", safeKeyUp, listenerOpts);
   if (typeof ctx.container?.addEventListener === "function") {
     ctx.container.addEventListener("pointerdown", markActive, listenerOpts);
     ctx.container.addEventListener("focusin", markActive, listenerOpts);
@@ -540,8 +556,8 @@ export function attachKeyboardListeners(
   }
 
   return () => {
-    window.removeEventListener("keydown", onKeyDown);
-    window.removeEventListener("keyup", onKeyUp);
+    window.removeEventListener("keydown", safeKeyDown);
+    window.removeEventListener("keyup", safeKeyUp);
     if (typeof ctx.container?.removeEventListener === "function") {
       ctx.container.removeEventListener("pointerdown", markActive);
       ctx.container.removeEventListener("focusin", markActive);

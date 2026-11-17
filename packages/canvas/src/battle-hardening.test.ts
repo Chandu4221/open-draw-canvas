@@ -1,6 +1,7 @@
 // Battle hardening tests for edge cases (R-004, R-006, R-008, R-010, R-015, R-016, R-039, ADR-0008, ADR-0011).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  MAX_COORDINATE_BOUND,
   MAX_DOCUMENT_DEPTH,
   MAX_PEN_PATH_POINTS,
   parseCustomShapeKind,
@@ -716,6 +717,88 @@ describe("Battle Hardening (ADR-0008, ADR-0011, R-006, R-016, R-039)", () => {
           delete (globalThis as unknown as { navigator?: unknown }).navigator;
         }
       }
+    });
+
+    it("clamps shapes drawn beyond MAX_COORDINATE_BOUND without throwing (P1-1)", () => {
+      const ed = createEditor(container as unknown as HTMLElement);
+      ed.setTool(TOOLS.drawRect);
+
+      // Pan far past 100k
+      ed.canvas.setCamera({ x: -150000, y: -150000, zoom: 1 });
+
+      const mockSvg = ed.svg as unknown as {
+        dispatch: (event: string, data: unknown) => void;
+      };
+
+      // Draw rect from world (150000, 150000) to (150100, 150100)
+      mockSvg.dispatch("pointerdown", {
+        button: 0,
+        pointerId: 1,
+        clientX: 0,
+        clientY: 0,
+        preventDefault: () => {},
+      });
+      mockSvg.dispatch("pointermove", {
+        pointerId: 1,
+        clientX: 100,
+        clientY: 100,
+      });
+      expect(() => {
+        mockSvg.dispatch("pointerup", {
+          pointerId: 1,
+          clientX: 100,
+          clientY: 100,
+        });
+      }).not.toThrow();
+
+      const shapes = Object.values(ed.getDocument().shapes).filter((s) => s.parentId === ROOT_ID);
+      expect(shapes).toHaveLength(1);
+      expect(Math.abs(shapes[0]!.boundingBox.x)).toBeLessThanOrEqual(MAX_COORDINATE_BOUND);
+      expect(Math.abs(shapes[0]!.boundingBox.y)).toBeLessThanOrEqual(MAX_COORDINATE_BOUND);
+
+      ed.destroy();
+    });
+
+    it("routes execution errors to onError callback without crashing (P1-2)", () => {
+      const errors: unknown[] = [];
+      const ed = createEditor(container as unknown as HTMLElement, {
+        onError: (err) => {
+          errors.push(err);
+        },
+      });
+
+      // Invalid command with out-of-bounds bounding box
+      ed.execute({
+        type: COMMANDS.setShapeBoundingBox,
+        id: parseShapeId("non-existent"),
+        boundingBox: { x: 0, y: 0, width: 100, height: 100 },
+      });
+
+      expect(errors).toHaveLength(1);
+      expect((errors[0] as Error).message).toContain("no shape with id");
+
+      ed.destroy();
+    });
+
+    it("makes select(badId) a no-op that preserves existing selection (P1-8)", () => {
+      const rect = createRect(parseShapeId("rect-valid"), {
+        x: 0,
+        y: 0,
+        width: 50,
+        height: 50,
+      });
+      const ed = createEditor(container as unknown as HTMLElement, {
+        document: createDocument([rect]),
+      });
+
+      ed.select(rect.id);
+      expect(ed.getSelection()).toEqual([rect.id]);
+
+      // Selecting non-existent shape does not wipe out existing selection
+      ed.select(parseShapeId("non-existent"));
+      expect(ed.getSelection()).toEqual([rect.id]);
+
+      ed.destroy();
     });
   });
 });

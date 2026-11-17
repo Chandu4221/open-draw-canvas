@@ -569,13 +569,49 @@ export function attachPointerListeners(
     }
   }
 
+  const safePointerDown = (event: PointerEvent): void => {
+    try {
+      onPointerDown(event);
+    } catch (err) {
+      ctx.onError?.(err);
+    }
+  };
+  const safePointerMove = (event: PointerEvent): void => {
+    try {
+      onPointerMove(event);
+    } catch (err) {
+      ctx.onError?.(err);
+    }
+  };
+  const safePointerUp = (event: PointerEvent): void => {
+    try {
+      onPointerUp(event);
+    } catch (err) {
+      ctx.onError?.(err);
+    }
+  };
+  const safePointerCancel = (event: PointerEvent): void => {
+    try {
+      onPointerCancel(event);
+    } catch (err) {
+      ctx.onError?.(err);
+    }
+  };
+  const safeDoubleClick = (event: MouseEvent): void => {
+    try {
+      onDoubleClick(event);
+    } catch (err) {
+      ctx.onError?.(err);
+    }
+  };
+
   const listenerOpts: AddEventListenerOptions | undefined = signal ? { signal } : undefined;
-  svg.addEventListener("pointerdown", onPointerDown, listenerOpts);
-  svg.addEventListener("pointermove", onPointerMove, listenerOpts);
-  svg.addEventListener("pointerup", onPointerUp, listenerOpts);
-  svg.addEventListener("pointercancel", onPointerCancel, listenerOpts);
-  svg.addEventListener("lostpointercapture", onPointerCancel, listenerOpts);
-  svg.addEventListener("dblclick", onDoubleClick, listenerOpts);
+  svg.addEventListener("pointerdown", safePointerDown, listenerOpts);
+  svg.addEventListener("pointermove", safePointerMove, listenerOpts);
+  svg.addEventListener("pointerup", safePointerUp, listenerOpts);
+  svg.addEventListener("pointercancel", safePointerCancel, listenerOpts);
+  svg.addEventListener("lostpointercapture", safePointerCancel, listenerOpts);
+  svg.addEventListener("dblclick", safeDoubleClick, listenerOpts);
   if (typeof window !== "undefined") {
     window.addEventListener("blur", onBlur, listenerOpts);
   }
@@ -584,12 +620,12 @@ export function attachPointerListeners(
   }
 
   return () => {
-    svg.removeEventListener("pointerdown", onPointerDown);
-    svg.removeEventListener("pointermove", onPointerMove);
-    svg.removeEventListener("pointerup", onPointerUp);
-    svg.removeEventListener("pointercancel", onPointerCancel);
-    svg.removeEventListener("lostpointercapture", onPointerCancel);
-    svg.removeEventListener("dblclick", onDoubleClick);
+    svg.removeEventListener("pointerdown", safePointerDown);
+    svg.removeEventListener("pointermove", safePointerMove);
+    svg.removeEventListener("pointerup", safePointerUp);
+    svg.removeEventListener("pointercancel", safePointerCancel);
+    svg.removeEventListener("lostpointercapture", safePointerCancel);
+    svg.removeEventListener("dblclick", safeDoubleClick);
     if (typeof window !== "undefined") {
       window.removeEventListener("blur", onBlur);
     }

@@ -8,6 +8,7 @@ import {
   STYLE_PROFILES,
 } from "@open-draw/contracts";
 import {
+  applySetShapeStyle,
   applyTransaction,
   COMMANDS,
   createDocument,
@@ -173,6 +174,32 @@ describe("document commands (milestone 05)", () => {
       ]),
     );
     expect(clearResult.document.shapes[rectId]?.fillStyle).toBeUndefined();
+  });
+
+  it("short-circuits and returns empty inverse when applySetShapeStyle encounters identical styles (P2)", () => {
+    const doc = createBaseDoc();
+    const result1 = applySetShapeStyle(doc, {
+      type: COMMANDS.setShapeStyle,
+      id: rectId,
+      fill: "#e0f2fe",
+      stroke: "#0284c7",
+      strokeWidth: 2,
+      fillStyle: FILL_STYLES.hatch,
+    });
+    expect(result1.inverse).toHaveLength(1);
+    expect(result1.document.shapes[rectId]?.fill).toBe("#e0f2fe");
+
+    // Re-applying the exact same style should short-circuit: doc unmodified, inverse empty
+    const result2 = applySetShapeStyle(result1.document, {
+      type: COMMANDS.setShapeStyle,
+      id: rectId,
+      fill: "#e0f2fe",
+      stroke: "#0284c7",
+      strokeWidth: 2,
+      fillStyle: FILL_STYLES.hatch,
+    });
+    expect(result2.document).toBe(result1.document);
+    expect(result2.inverse).toEqual([]);
   });
 
   it("updates and clears shape content with clean inverse (SetShapeContent)", () => {
