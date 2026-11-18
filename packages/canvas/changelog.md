@@ -5,10 +5,20 @@ All notable changes to the `@open-draw/canvas` package are documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.5] - 2026-11-17
+## [0.9.5] - 2026-11-18
+
+### Changed / Breaking
+
+- **Standalone 2D Vector Substrate (Purity Decoupling)**:
+  - Completely stripped all Studio wireframing and responsive concepts (`DeviceType`, `DEVICE_TYPES`, `meta.order`, `meta.hiddenOn`, `SetShapeHiddenOn`, `SetShapeOrder`, and `SetRootStyle`).
+  - Removed hardcoded `page` and `section` shape kinds in favor of capability-driven containment (`CAPABILITIES.container`).
+  - Removed hardcoded wireframe style presets (`STYLE_PROFILES`, `StyleId`) from contracts in favor of pure 2D vector style render registries.
+  - Simplified `ShapeMeta` to a clean generic dictionary with namespaced plugin data isolation (`shape.meta.pluginData`) for external domain plugins.
+  - Shapes live directly under `ROOT_ID` (`canvas:root`) by default.
 
 ### Added
 
+- **Standard Group Shape (`group`)**: Added native `group` shape (`GROUP_KIND`, `GROUP_CAPABILITIES = [container, resizable, movable]`, `createGroup()`, and `hitTestGroup()`) with support for hierarchical grouping (`Ctrl+G`), ungrouping (`Ctrl+Shift+G`), and parent-local coordinate containment.
 - **First-Class Z-Ordering System (R-005, R-015, R-016)**: Added `ReorderShapes` command to document core with lossless exact inverse permutations for `bringToFront`, `sendToBack`, `bringForward`, `sendBackward`, and arbitrary `setOrder`. Exposed public methods on `Editor` (`bringToFront`, `sendToBack`, `bringForward`, `sendBackward`), registered action IDs in `@open-draw/input`, and bound default keyboard shortcuts (`Ctrl+]`, `Ctrl+[`, `Ctrl+Shift+]`, `Ctrl+Shift+[`).
 - **Decoupled Container Capability (R-005, ADR-0002)**: Added `CAPABILITIES.container` ("container") to contracts and decoupled shape reparenting and drag/draw drop targets from application-specific metadata.
 - **Envelope Limits & Prototype Pollution Defense (R-004, R-006)**: Added `MAX_DOCUMENT_SHAPE_COUNT` (10,000), `MAX_PEN_PATH_POINTS` (2,000), and `MAX_DOCUMENT_BYTE_SIZE` (10MB) envelope limits with typed error factories (`documentShapeCountExceeded`, `documentSizeExceeded`). Enforced prototype pollution guards (`"__proto__"`, `"constructor"`) and coordinate bounds clamping (`MAX_COORDINATE_BOUND`).
