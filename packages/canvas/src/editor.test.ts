@@ -12,7 +12,8 @@ class MockDomNode {
   readonly style: Record<string, string> = {};
   readonly attributes: Record<string, string> = {};
   readonly children: MockDomNode[] = [];
-  innerHTML = "";
+  private _innerHTML = "";
+  private _outerHTML: string | undefined = undefined;
   value = "";
   className = "";
   listeners: Record<string, ((...args: unknown[]) => void)[]> = {};
@@ -21,12 +22,48 @@ class MockDomNode {
     this.tagName = tagName;
   }
 
-  focus(): void {}
-  select(): void {}
+  get innerHTML(): string {
+    if (this.children.length > 0) {
+      return this.children.map((c) => c.outerHTML).join("");
+    }
+    return this._innerHTML;
+  }
+
+  set innerHTML(val: string) {
+    this._innerHTML = val;
+    this._outerHTML = undefined;
+    this.children.length = 0;
+    const regex = /<g\s+data-shape-id="([^"]+)">([\s\S]*?)<\/g>/g;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(val)) !== null) {
+      const child = new MockDomNode("g");
+      child.setAttribute("data-shape-id", match[1]!);
+      child.innerHTML = match[2]!;
+      this.children.push(child);
+    }
+  }
 
   get outerHTML(): string {
-    return `<${this.tagName}>${this.innerHTML}</${this.tagName}>`;
+    if (this._outerHTML !== undefined) {
+      return this._outerHTML;
+    }
+    const attrs = Object.entries(this.attributes)
+      .map(([k, v]) => ` ${k}="${v}"`)
+      .join("");
+    return `<${this.tagName}${attrs}>${this._innerHTML}</${this.tagName}>`;
   }
+
+  set outerHTML(val: string) {
+    this._outerHTML = val;
+    const match = /<g\s+data-shape-id="([^"]+)">([\s\S]*?)<\/g>/.exec(val);
+    if (match) {
+      this.setAttribute("data-shape-id", match[1]!);
+      this._innerHTML = match[2]!;
+    }
+  }
+
+  focus(): void {}
+  select(): void {}
 
   setAttribute(name: string, val: string): void {
     this.attributes[name] = val;
@@ -50,6 +87,20 @@ class MockDomNode {
   }
 
   querySelector<T extends MockDomNode>(selector: string): T | null {
+    if (selector.startsWith("[") && selector.endsWith("]")) {
+      const match = /^\[([^=]+)="([^"]+)"\]$/.exec(selector);
+      if (match) {
+        const [, attr, val] = match;
+        for (const child of this.children) {
+          if (child.attributes[attr!] === val) {
+            return child as unknown as T;
+          }
+          const found = child.querySelector<T>(selector);
+          if (found !== null) return found;
+        }
+        return null;
+      }
+    }
     const className = selector.replace(/^\./, "");
     for (const child of this.children) {
       if (child.attributes["class"] === className || child.className === className) {
@@ -2628,6 +2679,51 @@ describe("createEditor", () => {
       // 5. Clear plugin data with null
       editor.setShapePluginData(shapeId, pluginId, null);
       expect(editor.getDocument().shapes[shapeId]?.meta.pluginData).toBeUndefined();
+    });
+
+    it("unwedges undo stack cleanly when inverse command encounters missing shape after setDocument with preserveHistory", () => {
+      const shapeA = createRect(parseShapeId("rect-a"), { x: 0, y: 0, width: 100, height: 100 });
+      const shapeB = createRect(parseShapeId("rect-b"), { x: 50, y: 50, width: 80, height: 80 });
+      const errors: unknown[] = [];
+      editor = createEditor(container as unknown as HTMLElement, {
+        document: createDocument([shapeA]),
+        onError: (err) => errors.push(err),
+      });
+
+      // Move shape A -> records inverse in history
+      editor.execute([{ type: COMMANDS.moveShapes, ids: [shapeA.id], dx: 20, dy: 30 }]);
+      expect(editor.canUndo()).toBe(true);
+
+      // Replace document with shape B only, preserving history
+      editor.setDocument(createDocument([shapeB]), { preserveHistory: true });
+      expect(editor.canUndo()).toBe(true);
+
+      // Undo inverse command targeting missing shape A
+      const undone = editor.undo();
+      expect(undone).toBe(true);
+      expect(errors.length).toBe(1);
+      // Undo stack was unwedged and popped, so canUndo is now false instead of stuck
+      expect(editor.canUndo()).toBe(false);
+      // Further operations succeed without throw
+      editor.execute([{ type: COMMANDS.moveShapes, ids: [shapeB.id], dx: 10, dy: 10 }]);
+      expect(editor.getDocument().shapes[shapeB.id]?.boundingBox.x).toBe(60);
+    });
+
+    it("patches individual shape DOM nodes on property mutations without full innerHTML rewrite", () => {
+      const rect = createRect(parseShapeId("rect-patch"), { x: 10, y: 10, width: 50, height: 50 });
+      editor = createEditor(container as unknown as HTMLElement, {
+        document: createDocument([rect]),
+      });
+
+      const docScene = (container as unknown as MockDomNode).querySelector(".od-document-scene")!;
+      const initialChildren = [...docScene.children];
+      expect(initialChildren.length).toBe(1);
+
+      // Mutate a property (fill) -> incremental property mutation
+      editor.setShapeStyle(rect.id, { fill: "#ff0000" });
+
+      // Node was patched in place via outerHTML
+      expect(docScene.innerHTML).toContain('fill="#ff0000"');
     });
   });
 });

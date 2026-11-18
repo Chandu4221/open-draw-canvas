@@ -378,5 +378,35 @@ describe("document commands", () => {
         height: 50,
       });
     });
+
+    it("rejects moveShapes when dx or dy is not finite", () => {
+      const doc = createBaseDoc();
+      expect(() =>
+        applyTransaction(
+          doc,
+          createTransaction([
+            {
+              type: COMMANDS.moveShapes,
+              ids: [rectId],
+              dx: Number.NaN,
+              dy: 10,
+            },
+          ]),
+        ),
+      ).toThrow(DocumentError);
+      expect(() =>
+        applyTransaction(
+          doc,
+          createTransaction([
+            {
+              type: COMMANDS.moveShapes,
+              ids: [rectId],
+              dx: 10,
+              dy: Number.POSITIVE_INFINITY,
+            },
+          ]),
+        ),
+      ).toThrow(DocumentError);
+    });
   });
 });

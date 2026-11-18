@@ -23,7 +23,7 @@ export function pointInBox(box: BoundingBox, point: Point): boolean {
 /**
  * Checks whether a shape qualifies as a drop-target container.
  * Open strokes (lines, pen paths) and leaf text shapes cannot be containers.
- * Page and section shapes are explicit containers.
+ * Group shapes are explicit containers.
  * Shapes with existing children or explicit container metadata act as containers.
  */
 export function isContainerShape(

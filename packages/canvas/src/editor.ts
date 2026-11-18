@@ -25,6 +25,7 @@ import {
   type Document,
   type HistoryState,
   type Shape,
+  type UndoRedoResult,
 } from "@open-draw/document";
 import {
   documentToSvg,
@@ -93,6 +94,11 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
   let isDestroyed = false;
   const abortController = typeof AbortController !== "undefined" ? new AbortController() : null;
   const abortSignal = abortController?.signal;
+
+  const defaultOnError = (err: unknown): void => {
+    console.error("[OpenDraw]", err);
+  };
+  const handleError = options.onError ?? defaultOnError;
 
   const customShapeRegistry: Record<string, CustomShapeExtension> = Object.create(null);
   const activeCustomRenderers: Record<string, ShapeSvgRenderer> = {
@@ -341,6 +347,7 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
       if (options.onError) {
         options.onError(err);
       } else {
+        handleError(err);
         throw err;
       }
     }
@@ -399,7 +406,7 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
         options.onDoubleClick?.(hitId);
       },
       snapConfig: options.snapping,
-      onError: options.onError,
+      onError: handleError,
     },
     abortSignal,
   );
@@ -436,7 +443,7 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
       execute: (cmds) => execute(cmds),
       render: () => renderOverlays(),
       nextShapeId: idSequence.nextShapeId,
-      onError: options.onError,
+      onError: handleError,
     },
     abortSignal,
   );
@@ -485,7 +492,7 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     renderOverlays();
   }
 
-  function applyHistory(result: { document: Document; history: HistoryState } | null): boolean {
+  function applyHistory(result: UndoRedoResult | null): boolean {
     if (result === null) return false;
     canvas.invalidateSpatialIndex();
     doc = result.document;
@@ -495,6 +502,9 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     canvas.emit(CONTROLLER_EVENTS.documentChanged);
     renderDocument();
     renderOverlays();
+    if (result.error !== undefined) {
+      handleError(result.error);
+    }
     return true;
   }
 

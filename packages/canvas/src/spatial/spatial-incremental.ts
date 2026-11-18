@@ -1,12 +1,7 @@
 // Incremental update mechanics for 2D STR R-Tree (R-002, R-008, R-010, R-016, ADR-0011).
 // Provides sub-millisecond leaf mutation and ancestor box updates without full tree rebuilds.
-import type { BoundingBox, ShapeId } from "@open-draw/contracts";
-import {
-  CONTAINER_KINDS,
-  absoluteBoundingBox,
-  subtreeOf,
-  type Document,
-} from "@open-draw/document";
+import { SHAPE_KINDS, type BoundingBox, type ShapeId } from "@open-draw/contracts";
+import { absoluteBoundingBox, isCustomShape, subtreeOf, type Document } from "@open-draw/document";
 import {
   computeEnclosingFromItems,
   computeEnclosingFromNodes,
@@ -207,13 +202,19 @@ export function findIncrementalSpatialChanges(
 
   if (directlyChanged.length === 0) return [];
 
-  // Expand only containers to include descendants
+  // Expand containers or custom shapes to include descendants
   const allAffected = new Set<ShapeId>();
   for (let i = 0; i < directlyChanged.length; i += 1) {
     const id = directlyChanged[i]!;
     allAffected.add(id);
     const shape = nextShapes[id]!;
-    if (CONTAINER_KINDS.has(shape.kind)) {
+    const mightHaveChildren =
+      shape.kind === SHAPE_KINDS.group ||
+      shape.kind === SHAPE_KINDS.rect ||
+      shape.meta.isContainer === true ||
+      shape.meta.container === true ||
+      isCustomShape(shape);
+    if (mightHaveChildren) {
       const subtree = subtreeOf(nextDoc, id);
       for (let s = 0; s < subtree.length; s += 1) {
         allAffected.add(subtree[s]!.id);

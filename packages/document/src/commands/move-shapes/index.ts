@@ -17,6 +17,9 @@ export interface MoveShapes {
 }
 
 export function applyMoveShapes(document: Document, command: MoveShapes): CommandResult {
+  if (!Number.isFinite(command.dx) || !Number.isFinite(command.dy)) {
+    throw new DocumentError("invalidCommand", "dx and dy must be finite numbers");
+  }
   for (const id of command.ids) {
     if (document.shapes[id] === undefined) {
       throw new DocumentError("shapeNotFound", `no shape with id: ${id}`);

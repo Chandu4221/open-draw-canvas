@@ -13,6 +13,7 @@ import type { Document } from "./document";
 import { SCHEMA_VERSION } from "./document";
 import { DocumentError } from "./errors";
 import { pruneSelectedDescendants } from "./reparent";
+import { isJsonSerializable } from "./meta-validation";
 import { isCustomShape, type LineShape, type PenPathShape, type Shape } from "./shape";
 import { subtreeOf } from "./tree";
 import { parseShape } from "./validation";
@@ -99,6 +100,9 @@ export function applyCommandToMap(
     }
 
     case COMMANDS.moveShapes: {
+      if (!Number.isFinite(command.dx) || !Number.isFinite(command.dy)) {
+        throw new DocumentError("invalidCommand", "dx and dy must be finite numbers");
+      }
       for (const id of command.ids) {
         if (shapes[id] === undefined) {
           throw new DocumentError("shapeNotFound", `no shape with id: ${id}`);
@@ -345,6 +349,13 @@ export function applyCommandToMap(
       const shape = shapes[command.id];
       if (shape === undefined) {
         throw new DocumentError("shapeNotFound", `no shape with id: ${command.id}`);
+      }
+      if (
+        command.data !== null &&
+        command.data !== undefined &&
+        !isJsonSerializable(command.data)
+      ) {
+        throw new DocumentError("invalidMeta", "plugin data must be JSON-serializable");
       }
       const pluginId = parsePluginId(command.pluginId);
       const previousData = shape.meta.pluginData?.[pluginId] ?? null;

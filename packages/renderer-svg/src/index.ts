@@ -6,7 +6,6 @@ import type { BoundingBox, Point } from "@open-draw/contracts";
 import { RENDER_STYLES } from "./document-to-svg";
 
 export * from "./document-to-svg";
-export * from "./styles/crayon";
 export type { ShapeSvgRenderer } from "./document-to-svg";
 export * from "./escape-xml";
 

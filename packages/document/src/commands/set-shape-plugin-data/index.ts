@@ -5,6 +5,7 @@ import type { Command, CommandResult } from "..";
 import type { Document } from "../../document";
 import { createDocument } from "../../document";
 import { DocumentError } from "../../errors";
+import { isJsonSerializable } from "../../meta-validation";
 import type { Shape, ShapeMeta } from "../../shape";
 import { COMMANDS } from "../registry";
 
@@ -22,6 +23,10 @@ export function applySetShapePluginData(
   const shape = document.shapes[command.id];
   if (shape === undefined) {
     throw new DocumentError("shapeNotFound", `no shape with id: ${command.id}`);
+  }
+
+  if (command.data !== null && command.data !== undefined && !isJsonSerializable(command.data)) {
+    throw new DocumentError("invalidMeta", "plugin data must be JSON-serializable");
   }
 
   const pluginId = parsePluginId(command.pluginId);

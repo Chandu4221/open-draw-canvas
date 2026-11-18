@@ -6,6 +6,7 @@ import {
   parseCustomShapeKind,
   parseShapeId,
   ROOT_ID,
+  SHAPE_KINDS,
 } from "@open-draw/contracts";
 import {
   createCustomShape,
@@ -18,14 +19,15 @@ import {
   type Shape,
 } from "@open-draw/document";
 import {
-  CRAYON_SHAPE_RENDERERS,
   documentToSvg,
+  escapeXml,
   fallbackShapeToSvg,
   previewLineToSvg,
   previewPenPathToSvg,
   renderSingleShapeSvg,
   selectionOverlayToSvg,
   type RendererFallbackEvent,
+  type ShapeSvgRenderer,
 } from "./index";
 
 describe("documentToSvg", () => {
@@ -127,13 +129,18 @@ describe("gesture previews", () => {
   });
 });
 
-describe("crayon render style (ADR-0005 D3, R-021)", () => {
+const MOCK_CUSTOM_RENDERERS: Readonly<Record<string, ShapeSvgRenderer>> = Object.freeze({
+  [SHAPE_KINDS.rect]: (shape, box) =>
+    `<path d="M${box.x},${box.y} L${box.x + box.width},${box.y}" stroke="#2d3748" fill="${shape.fill ?? "none"}" />`,
+});
+
+describe("customRenderers style override (ADR-0005 D3, R-021)", () => {
   it("renders deterministic byte-identical SVG for the same shape across calls", () => {
     const rectId = parseShapeId("rect-1");
     const doc = createDocument([createRect(rectId, { x: 50, y: 60, width: 200, height: 100 })]);
 
-    const run1 = documentToSvg(doc, { customRenderers: CRAYON_SHAPE_RENDERERS });
-    const run2 = documentToSvg(doc, { customRenderers: CRAYON_SHAPE_RENDERERS });
+    const run1 = documentToSvg(doc, { customRenderers: MOCK_CUSTOM_RENDERERS });
+    const run2 = documentToSvg(doc, { customRenderers: MOCK_CUSTOM_RENDERERS });
 
     expect(run1).toBe(run2);
     expect(run1).toContain("<path");
@@ -147,7 +154,7 @@ describe("crayon render style (ADR-0005 D3, R-021)", () => {
       createCustomShape(starId, starKind, { x: 10, y: 10, width: 80, height: 80 }),
     ]);
 
-    const svg = documentToSvg(doc, { customRenderers: CRAYON_SHAPE_RENDERERS });
+    const svg = documentToSvg(doc, { customRenderers: MOCK_CUSTOM_RENDERERS });
     expect(svg).toContain("[vendor:star]");
   });
 });
@@ -404,8 +411,8 @@ describe("visible text on shapes (F2, ADR-0006 Option A / shape.content)", () =>
       expect(svg).toContain('fill="url(#od-pattern-hatch-inst1-rect-hatch)"');
     });
 
-    it("renders fillStyle in crayon / hand-drawn mode (R-021)", () => {
-      const rectId = parseShapeId("rect-crayon-transp");
+    it("renders fillStyle with custom renderers (R-021)", () => {
+      const rectId = parseShapeId("rect-custom-transp");
       const doc = createDocument([
         createRect(
           rectId,
@@ -413,8 +420,21 @@ describe("visible text on shapes (F2, ADR-0006 Option A / shape.content)", () =>
           { fillStyle: FILL_STYLES.none },
         ),
       ]);
-      const svg = documentToSvg(doc, { customRenderers: CRAYON_SHAPE_RENDERERS });
+      const svg = documentToSvg(doc, { customRenderers: MOCK_CUSTOM_RENDERERS });
       expect(svg).toContain('fill="none"');
+    });
+
+    it("strips XML 1.0 disallowed control characters and escapes entities", () => {
+      const escaped = escapeXml('Hello\x00\x08World\x0B & <tag> "quotes"');
+      expect(escaped).toBe("HelloWorld &amp; &lt;tag&gt; &quot;quotes&quot;");
+
+      const textId = parseShapeId("text-ctrl");
+      const doc = createDocument([
+        createText(textId, { x: 0, y: 0, width: 100, height: 30 }, { content: "Bad\x00Text" }),
+      ]);
+      const svg = documentToSvg(doc);
+      expect(svg).toContain("BadText");
+      expect(svg).not.toContain("\x00");
     });
   });
 });

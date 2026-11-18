@@ -68,7 +68,7 @@ describe("parseDocument", () => {
     expect(() => parseDocument(input)).toThrow(DocumentError);
   });
 
-  it("rejects a non-container parent", () => {
+  it("allows structural hierarchy under any shape at the data layer", () => {
     const ellipse = createEllipse(
       parseShapeId("ellipse-1"),
       { x: 10, y: 10, width: 50, height: 50 },
@@ -81,9 +81,8 @@ describe("parseDocument", () => {
         parentId: parseShapeId("ellipse-1"),
       },
     );
-    expect(() => parseDocument(serialize([rootGroup, subGroup, ellipse, nested]))).toThrow(
-      DocumentError,
-    );
+    const doc = parseDocument(serialize([rootGroup, subGroup, ellipse, nested]));
+    expect(doc.shapes[parseShapeId("rect-2")]?.parentId).toBe("ellipse-1");
   });
 
   it("allows a nested rectangle to contain child shapes for N-level nesting", () => {

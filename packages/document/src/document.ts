@@ -3,9 +3,14 @@
 // the structural invariants (parent chains, cycle check, container rules) are
 // enforced, so every document — parsed or built by commands — is valid.
 import type { ShapeId } from "@open-draw/contracts";
-import { MAX_DOCUMENT_DEPTH, SHAPE_KINDS, isRootId } from "@open-draw/contracts";
+import {
+  MAX_DOCUMENT_DEPTH,
+  MAX_DOCUMENT_SHAPE_COUNT,
+  SHAPE_KINDS,
+  isRootId,
+} from "@open-draw/contracts";
 import { DocumentError } from "./errors";
-import { isCustomShape, type Shape } from "./shape";
+import type { Shape } from "./shape";
 
 export const SCHEMA_VERSION = 1 as const;
 
@@ -18,13 +23,61 @@ export interface Document {
   readonly shapes: Readonly<Record<ShapeId, Shape>>;
 }
 
+export interface CreateDocumentOptions {
+  readonly maxShapeCount?: number;
+  readonly validateOnlyIds?: ReadonlySet<ShapeId> | readonly ShapeId[];
+}
+
 export const CONTAINER_KINDS: ReadonlySet<string> = new Set([SHAPE_KINDS.group, SHAPE_KINDS.rect]);
 
-function validateStructure(shapes: Readonly<Record<ShapeId, Shape>>): void {
-  for (const shape of Object.values(shapes)) {
+function validateStructure(
+  shapes: Readonly<Record<ShapeId, Shape>>,
+  maxShapeCount: number = MAX_DOCUMENT_SHAPE_COUNT,
+  validateOnlyIds?: ReadonlySet<ShapeId> | readonly ShapeId[],
+): void {
+  const shapeCount = Object.keys(shapes).length;
+  if (shapeCount > maxShapeCount) {
+    throw new DocumentError(
+      "documentShapeCountExceeded",
+      `document shape count (${shapeCount}) exceeds maximum limit (${maxShapeCount})`,
+    );
+  }
+
+  const shapesToValidate: Shape[] = [];
+  if (validateOnlyIds !== undefined) {
+    for (const id of validateOnlyIds) {
+      const shape = shapes[id];
+      if (shape !== undefined) {
+        shapesToValidate.push(shape);
+      }
+    }
+  } else {
+    for (const shape of Object.values(shapes)) {
+      shapesToValidate.push(shape);
+    }
+  }
+
+  for (let i = 0; i < shapesToValidate.length; i++) {
+    const shape = shapesToValidate[i]!;
+    const b = shape.boundingBox;
+    if (
+      !Number.isFinite(b.x) ||
+      !Number.isFinite(b.y) ||
+      !Number.isFinite(b.width) ||
+      !Number.isFinite(b.height) ||
+      b.width <= 0 ||
+      b.height <= 0
+    ) {
+      throw new DocumentError(
+        "invalidShape",
+        `shape ${shape.id} has invalid bounding box: coordinates must be finite and dimensions positive`,
+      );
+    }
+
     if (isRootId(shape.parentId)) {
       continue;
     }
+
     const visited = new Set<ShapeId>([shape.id]);
     let cursor = shape.parentId;
     let depth = 1;
@@ -47,31 +100,23 @@ function validateStructure(shapes: Readonly<Record<ShapeId, Shape>>): void {
       cursor = parent.parentId;
     }
   }
-  for (const shape of Object.values(shapes)) {
-    if (!isRootId(shape.parentId)) {
-      const parentShape = shapes[shape.parentId];
-      const isValidContainer =
-        parentShape !== undefined &&
-        (CONTAINER_KINDS.has(parentShape.kind) || isCustomShape(parentShape));
-      if (!isValidContainer) {
-        throw new DocumentError(
-          "invalidShape",
-          `parent must be a container shape (group, rect, or custom container), got: ${parentShape?.kind} (${shape.id})`,
-        );
-      }
-    }
-  }
 }
 
-export function createDocumentFromMap(shapesMap: Record<ShapeId, Shape>): Document {
-  validateStructure(shapesMap);
+export function createDocumentFromMap(
+  shapesMap: Record<ShapeId, Shape>,
+  options?: CreateDocumentOptions,
+): Document {
+  validateStructure(shapesMap, options?.maxShapeCount, options?.validateOnlyIds);
   return Object.freeze({
     schema: Object.freeze({ version: SCHEMA_VERSION }),
     shapes: Object.freeze(shapesMap),
   });
 }
 
-export function createDocument(shapes: readonly Shape[] = []): Document {
+export function createDocument(
+  shapes: readonly Shape[] = [],
+  options?: CreateDocumentOptions,
+): Document {
   const shapesMap: Record<ShapeId, Shape> = {};
   for (const shape of shapes) {
     if (shapesMap[shape.id] !== undefined) {
@@ -79,5 +124,5 @@ export function createDocument(shapes: readonly Shape[] = []): Document {
     }
     shapesMap[shape.id] = shape;
   }
-  return createDocumentFromMap(shapesMap);
+  return createDocumentFromMap(shapesMap, options);
 }

@@ -6,7 +6,7 @@ import type { CapabilityId } from "./capabilities";
 // so display names never drift from the kinds they label.
 //
 // Hybrid registry model:
-// - Built-in shape kinds stay closed: page, section, rect, ellipse, line, pen-path, text.
+// - Built-in shape kinds stay closed: rect, ellipse, line, pen-path, text, group.
 // - Custom shape kinds are pattern-open: "<scope>:<name>" kebab-case branded strings.
 export const SHAPE_KINDS = {
   rect: "rect",

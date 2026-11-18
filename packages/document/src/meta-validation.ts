@@ -9,6 +9,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+export function isJsonSerializable(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  const t = typeof value;
+  if (t === "number") return Number.isFinite(value);
+  if (t === "string" || t === "boolean") return true;
+  if (t === "bigint" || t === "symbol" || t === "function") return false;
+  try {
+    JSON.stringify(value, (_, val) => {
+      if (typeof val === "bigint" || typeof val === "function" || typeof val === "symbol") {
+        throw new TypeError("not serializable");
+      }
+      if (typeof val === "number" && !Number.isFinite(val)) {
+        throw new TypeError("not finite");
+      }
+      return val;
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function parseMeta(value: unknown): ShapeMeta {
   if (value === undefined || value === null) {
     return {};
@@ -36,6 +58,9 @@ export function parseMeta(value: unknown): ShapeMeta {
     for (const [key, pluginVal] of Object.entries(value.pluginData)) {
       if (!isValidPluginId(key)) {
         throw new DocumentError("invalidMeta", `invalid plugin id in meta.pluginData: ${key}`);
+      }
+      if (!isJsonSerializable(pluginVal)) {
+        throw new DocumentError("invalidMeta", `plugin data for ${key} must be JSON-serializable`);
       }
       pluginData[key as PluginId] = pluginVal;
     }

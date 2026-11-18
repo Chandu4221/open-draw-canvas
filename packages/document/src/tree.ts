@@ -75,7 +75,7 @@ export function ancestorsOf(document: Document, shape: Shape): readonly Shape[] 
   return result;
 }
 
-// Absolute page-space bounding box, derived by walking parent-local
+// Absolute canvas-space bounding box, derived by walking parent-local
 // bounding boxes (ADR-0002 D4).
 export function absoluteBoundingBox(document: Document, shape: Shape): BoundingBox {
   let x = shape.boundingBox.x;
@@ -87,7 +87,7 @@ export function absoluteBoundingBox(document: Document, shape: Shape): BoundingB
   return { x, y, width: shape.boundingBox.width, height: shape.boundingBox.height };
 }
 
-// Depth-first pre-order walk: pages in map order, then each subtree.
+// Depth-first pre-order walk: root children in map order, then each subtree.
 export function shapeListInOrder(document: Document, childIndex?: ChildIndex): readonly Shape[] {
   const index = childIndex ?? buildChildIndex(document);
   const result: Shape[] = [];

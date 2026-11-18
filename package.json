@@ -1,6 +1,6 @@
 {
   "name": "open-draw-canvas-root",
-  "version": "0.9.5",
+  "version": "0.10.0",
   "description": "A framework-free, batteries-included visual canvas and drawing SDK monorepo",
   "license": "MIT",
   "repository": {
