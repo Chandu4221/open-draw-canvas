@@ -1,10 +1,19 @@
-// Boundary parser from JSON string to validated Document (R-006: parse, don't validate).
-// Fails loudly with typed DocumentError on any schema or shape mismatch.
+import { MAX_DOCUMENT_BYTE_SIZE } from "@open-draw/contracts";
 import type { Document } from "./document";
 import { DocumentError } from "./errors";
 import { parseDocument as parseDocumentFromUnknown } from "./validation";
 
 export function parseDocument(json: string): Document {
+  if (typeof json !== "string") {
+    throw new DocumentError("invalidDocument", "serialized document must be a string");
+  }
+  if (json.length > MAX_DOCUMENT_BYTE_SIZE) {
+    throw new DocumentError(
+      "documentSizeExceeded",
+      `document byte length (${json.length}) exceeds maximum limit (${MAX_DOCUMENT_BYTE_SIZE})`,
+    );
+  }
+
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);

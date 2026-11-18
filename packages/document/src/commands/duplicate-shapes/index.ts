@@ -1,8 +1,7 @@
 // DuplicateShapes: clones shapes and their subtrees with an offset (F5, ADR-0006 Option A).
 // Parent-child links are remapped to new cloned IDs. One gesture = one transaction (R-018).
 // Platform and style are preserved on root shapes (R-026).
-import type { ShapeId } from "@open-draw/contracts";
-import { parseShapeId } from "@open-draw/contracts";
+import { MAX_COORDINATE_BOUND, parseShapeId, type ShapeId } from "@open-draw/contracts";
 import type { Command, CommandResult } from "..";
 import type { Document } from "../../document";
 import { createDocument } from "../../document";
@@ -77,8 +76,14 @@ export function applyDuplicateShapes(document: Document, command: DuplicateShape
     const newBoundingBox = isTopLevel
       ? {
           ...shape.boundingBox,
-          x: shape.boundingBox.x + dx,
-          y: shape.boundingBox.y + dy,
+          x: Math.max(
+            -MAX_COORDINATE_BOUND,
+            Math.min(MAX_COORDINATE_BOUND, shape.boundingBox.x + dx),
+          ),
+          y: Math.max(
+            -MAX_COORDINATE_BOUND,
+            Math.min(MAX_COORDINATE_BOUND, shape.boundingBox.y + dy),
+          ),
         }
       : shape.boundingBox;
 

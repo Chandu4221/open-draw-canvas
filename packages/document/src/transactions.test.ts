@@ -1,27 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { EMPTY_HISTORY, redo, recordHistory, undo } from "./history";
 import { DocumentError } from "./errors";
-import { createPage, createRect, createSection } from "./shape";
+import { createGroup, createRect } from "./shape";
 import { COMMANDS, type Command } from "./commands";
 import { applyTransaction, createTransaction } from "./transactions";
 import { createDocument } from "./document";
 import type { Document } from "./document";
 import type { Shape } from "./shape";
-import { DEVICE_TYPES, parseShapeId, STYLE_PROFILES } from "@open-draw/contracts";
+import { parseShapeId } from "@open-draw/contracts";
 
 const empty = createDocument();
 
-const page = createPage(parseShapeId("page-1"), { x: 0, y: 0, width: 1440, height: 900 });
+const group1 = createGroup(parseShapeId("group-1"), { x: 0, y: 0, width: 1440, height: 900 });
 function withShapes(shapes: readonly Shape[]): Document {
   return createDocument(shapes);
 }
 
 describe("applyTransaction", () => {
   it("creates a shape and reports a delete as its inverse", () => {
-    const create = createTransaction([{ type: COMMANDS.createShape, shape: page }]);
+    const create = createTransaction([{ type: COMMANDS.createShape, shape: group1 }]);
     const result = applyTransaction(empty, create);
-    expect(result.document.shapes[parseShapeId("page-1")]?.kind).toBe("page");
-    expect(result.inverse).toEqual([{ type: COMMANDS.deleteShape, id: "page-1" }]);
+    expect(result.document.shapes[parseShapeId("group-1")]?.kind).toBe("group");
+    expect(result.inverse).toEqual([{ type: COMMANDS.deleteShape, id: "group-1" }]);
   });
 
   it("rejects an empty transaction", () => {
@@ -31,46 +31,45 @@ describe("applyTransaction", () => {
   it("rejects creating a duplicate id", () => {
     const once = applyTransaction(
       empty,
-      createTransaction([{ type: COMMANDS.createShape, shape: page }]),
+      createTransaction([{ type: COMMANDS.createShape, shape: group1 }]),
     );
     expect(() =>
       applyTransaction(
         once.document,
-        createTransaction([{ type: COMMANDS.createShape, shape: page }]),
+        createTransaction([{ type: COMMANDS.createShape, shape: group1 }]),
       ),
     ).toThrow(DocumentError);
   });
 
   it("deletes a subtree and recreates it on undo, then removes it again on redo", () => {
-    const section = createSection(
-      parseShapeId("section-1"),
+    const childGroup = createGroup(
+      parseShapeId("group-child"),
       { x: 0, y: 0, width: 1400, height: 120 },
-      "column",
       {
-        parent: parseShapeId("page-1"),
+        parent: parseShapeId("group-1"),
       },
     );
     const rect = createRect(
       parseShapeId("rect-1"),
       { x: 0, y: 0, width: 100, height: 50 },
       {
-        parent: parseShapeId("section-1"),
+        parent: parseShapeId("group-child"),
         label: "Button",
       },
     );
-    const built = withShapes([page, section, rect]);
+    const built = withShapes([group1, childGroup, rect]);
 
     const removed = applyTransaction(
       built,
-      createTransaction([{ type: COMMANDS.deleteShape, id: parseShapeId("section-1") }]),
+      createTransaction([{ type: COMMANDS.deleteShape, id: parseShapeId("group-child") }]),
     );
-    expect(removed.document.shapes[parseShapeId("section-1")]).toBeUndefined();
+    expect(removed.document.shapes[parseShapeId("group-child")]).toBeUndefined();
     expect(removed.document.shapes[parseShapeId("rect-1")]).toBeUndefined();
 
     let history = recordHistory(EMPTY_HISTORY, removed.inverse);
     const undone = undo(removed.document, history);
     expect(undone?.document.shapes[parseShapeId("rect-1")]?.label).toBe("Button");
-    expect(undone?.document.shapes[parseShapeId("rect-1")]?.parentId).toBe("section-1");
+    expect(undone?.document.shapes[parseShapeId("rect-1")]?.parentId).toBe("group-child");
 
     history = undone!.history;
     const redone = redo(undone!.document, history);
@@ -78,18 +77,17 @@ describe("applyTransaction", () => {
   });
 
   it("restores the previous label through set/undo", () => {
-    const section = createSection(
-      parseShapeId("section-1"),
+    const childGroup = createGroup(
+      parseShapeId("group-child"),
       { x: 0, y: 0, width: 100, height: 100 },
-      "row",
-      { parent: parseShapeId("page-1") },
+      { parent: parseShapeId("group-1") },
     );
     const labeled = createRect(
       parseShapeId("rect-1"),
       { x: 0, y: 0, width: 10, height: 10 },
-      { parent: parseShapeId("section-1"), label: "Old" },
+      { parent: parseShapeId("group-child"), label: "Old" },
     );
-    const built = withShapes([page, section, labeled]);
+    const built = withShapes([group1, childGroup, labeled]);
 
     const renamed = applyTransaction(
       built,
@@ -104,22 +102,21 @@ describe("applyTransaction", () => {
   });
 
   it("rejects a reparent that would create a cycle", () => {
-    const section = createSection(
-      parseShapeId("section-1"),
+    const childGroup = createGroup(
+      parseShapeId("group-child"),
       { x: 0, y: 0, width: 100, height: 100 },
-      "row",
-      { parent: parseShapeId("page-1") },
+      { parent: parseShapeId("group-1") },
     );
-    const built = withShapes([page, section]);
+    const built = withShapes([group1, childGroup]);
     expect(() =>
       applyTransaction(
         built,
         createTransaction([
           {
             type: COMMANDS.reparentShape,
-            id: parseShapeId("page-1"),
-            parentId: parseShapeId("section-1"),
-            boundingBox: page.boundingBox,
+            id: parseShapeId("group-1"),
+            parentId: parseShapeId("group-child"),
+            boundingBox: group1.boundingBox,
           },
         ]),
       ),
@@ -127,13 +124,13 @@ describe("applyTransaction", () => {
   });
 
   it("moves a shape as one batch and undoes without reordering siblings", () => {
-    const pageId = parseShapeId("page-1");
+    const groupId = parseShapeId("group-1");
     const firstId = parseShapeId("rect-first");
     const secondId = parseShapeId("rect-second");
     const built = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 640, height: 480 }),
-      createRect(firstId, { x: 10, y: 10, width: 20, height: 20 }, { parent: pageId }),
-      createRect(secondId, { x: 50, y: 10, width: 20, height: 20 }, { parent: pageId }),
+      createGroup(groupId, { x: 0, y: 0, width: 640, height: 480 }),
+      createRect(firstId, { x: 10, y: 10, width: 20, height: 20 }, { parent: groupId }),
+      createRect(secondId, { x: 50, y: 10, width: 20, height: 20 }, { parent: groupId }),
     ]);
 
     const moved = applyTransaction(
@@ -151,11 +148,11 @@ describe("applyTransaction", () => {
   });
 
   it("resizes a shape and restores the previous box on undo", () => {
-    const pageId = parseShapeId("page-1");
+    const groupId = parseShapeId("group-1");
     const rectId = parseShapeId("rect-1");
     const built = createDocument([
-      createPage(pageId, { x: 100, y: 100, width: 640, height: 480 }),
-      createRect(rectId, { x: 10, y: 10, width: 50, height: 30 }, { parent: pageId }),
+      createGroup(groupId, { x: 100, y: 100, width: 640, height: 480 }),
+      createRect(rectId, { x: 10, y: 10, width: 50, height: 30 }, { parent: groupId }),
     ]);
 
     const resized = applyTransaction(
@@ -203,11 +200,11 @@ describe("applyTransaction", () => {
 
   it("applies large command batch in linear time without quadratic re-validation", () => {
     const emptyDoc = createDocument([]);
-    const pageId = parseShapeId("perf-page");
+    const groupId = parseShapeId("perf-group");
     const commands: Command[] = [
       {
         type: COMMANDS.createShape,
-        shape: createPage(pageId, { x: 0, y: 0, width: 2000, height: 2000 }),
+        shape: createGroup(groupId, { x: 0, y: 0, width: 2000, height: 2000 }),
       },
     ];
     for (let i = 0; i < 1000; i++) {
@@ -216,7 +213,7 @@ describe("applyTransaction", () => {
         shape: createRect(
           parseShapeId(`r-${i}`),
           { x: 10, y: 10, width: 20, height: 20 },
-          { parent: pageId },
+          { parent: groupId },
         ),
       });
     }
@@ -229,14 +226,14 @@ describe("applyTransaction", () => {
   });
 
   it("returns an empty inverse and preserves shape instances when applying no-op commands (R-018)", () => {
-    const pageId = parseShapeId("page-1");
+    const groupId = parseShapeId("group-1");
     const rectId = parseShapeId("rect-1");
     const doc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 500, height: 500 }),
+      createGroup(groupId, { x: 0, y: 0, width: 500, height: 500 }),
       createRect(
         rectId,
         { x: 10, y: 10, width: 100, height: 100 },
-        { parent: pageId, label: "Title" },
+        { parent: groupId, label: "Title" },
       ),
     ]);
 
@@ -250,40 +247,30 @@ describe("applyTransaction", () => {
     expect(result.document.shapes[rectId]).toBe(doc.shapes[rectId]);
   });
 
-  it("short-circuits no-op mutations for order, hiddenOn, root style, and reparent (R-018)", () => {
-    const pageId = parseShapeId("page-meta");
+  it("short-circuits no-op mutations for reparent, label, and style (R-018)", () => {
+    const groupId = parseShapeId("group-meta");
     const rectId = parseShapeId("rect-meta");
-    const pageShape = {
-      ...createPage(pageId, { x: 0, y: 0, width: 600, height: 600 }),
-      meta: {
-        order: {},
-        style: STYLE_PROFILES.minimal,
-      },
-    };
-    const rectShape = {
-      ...createRect(rectId, { x: 20, y: 20, width: 80, height: 80 }, { parent: pageId }),
-      meta: {
-        order: { [DEVICE_TYPES.mobile]: 2 },
-        hiddenOn: [DEVICE_TYPES.mobile],
-      },
-    };
-    const doc = createDocument([pageShape, rectShape]);
+    const groupShape = createGroup(groupId, { x: 0, y: 0, width: 600, height: 600 });
+    const rectShape = createRect(
+      rectId,
+      { x: 20, y: 20, width: 80, height: 80 },
+      { parent: groupId, label: "Static" },
+    );
+    const doc = createDocument([groupShape, rectShape]);
 
     const tx = createTransaction([
-      { type: COMMANDS.setShapeOrder, id: rectId, deviceType: DEVICE_TYPES.mobile, order: 2 },
-      { type: COMMANDS.setShapeHiddenOn, id: rectId, hiddenOn: [DEVICE_TYPES.mobile] },
-      { type: COMMANDS.setRootStyle, id: pageId, style: STYLE_PROFILES.minimal },
+      { type: COMMANDS.setShapeLabel, id: rectId, label: "Static" },
       {
         type: COMMANDS.reparentShape,
         id: rectId,
-        parentId: pageId,
+        parentId: groupId,
         boundingBox: { x: 20, y: 20, width: 80, height: 80 },
       },
     ]);
 
     const result = applyTransaction(doc, tx);
     expect(result.inverse).toEqual([]);
-    expect(result.document.shapes[pageId]).toBe(doc.shapes[pageId]);
+    expect(result.document.shapes[groupId]).toBe(doc.shapes[groupId]);
     expect(result.document.shapes[rectId]).toBe(doc.shapes[rectId]);
   });
 });

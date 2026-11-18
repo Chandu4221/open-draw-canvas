@@ -1,14 +1,12 @@
 // Pure SVG export derivation for standalone editor (R-008, R-016, M2).
 // Produces standalone valid SVG without editor chrome, handles, or overlays.
-import type { DeviceType, ShapeId } from "@open-draw/contracts";
 import { absoluteBoundingBox, type Document } from "@open-draw/document";
 import { documentToSvg, type ShapeSvgRenderer } from "@open-draw/renderer-svg";
 
 export interface SvgExportOptions {
-  readonly activeDeviceType?: DeviceType | undefined;
-  readonly activeDeviceTypes?: Readonly<Record<ShapeId, DeviceType | undefined>> | undefined;
   readonly customRenderers?: Readonly<Record<string, ShapeSvgRenderer>> | undefined;
   readonly padding?: number | undefined;
+  readonly instanceId?: string | undefined;
 }
 
 export function exportDocumentToSvg(doc: Document, options?: SvgExportOptions): string {
@@ -51,9 +49,8 @@ export function exportDocumentToSvg(doc: Document, options?: SvgExportOptions): 
   }
 
   const content = documentToSvg(doc, {
-    activeDeviceType: options?.activeDeviceType,
-    activeDeviceTypes: options?.activeDeviceTypes,
     customRenderers: options?.customRenderers,
+    instanceId: options?.instanceId,
   });
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x} ${y} ${width} ${height}" width="${width}" height="${height}">${content}</svg>`;

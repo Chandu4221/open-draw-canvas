@@ -1,7 +1,7 @@
 /// @open-draw/canvas — public SDK contract surface (R-004, R-010, R-036, ADR-0008).
 /// Pure interaction core and batteries-included visual canvas controller.
 
-export const CANVAS_VERSION = "0.9.4" as const;
+export const CANVAS_VERSION = "0.10.0" as const;
 
 export {
   type Camera,
@@ -180,8 +180,6 @@ export {
   type CustomShapeKind,
   isValidCustomShapeKind,
   parseCustomShapeKind,
-  type DeviceType,
-  DEVICE_TYPES,
   type Point,
   type ShapeId,
   parseShapeId,
@@ -191,9 +189,6 @@ export {
   type BuiltinShapeKind,
   SHAPE_KINDS,
   SHAPE_KIND_LABELS,
-  type StyleId,
-  STYLE_PROFILES,
-  type StyleProfile,
   type FillStyle,
   FILL_STYLES,
   FILL_STYLE_VALUES,
@@ -214,8 +209,7 @@ export {
   createDocument,
   type Document,
   type Shape,
-  type PageShape,
-  type SectionShape,
+  type GroupShape,
   type RectShape,
   type EllipseShape,
   type LineShape,
@@ -240,8 +234,7 @@ export {
   childrenOf,
   subtreeOf,
   absoluteBoundingBox,
-  createPage,
-  createSection,
+  createGroup,
   createRect,
   createEllipse,
   createLine,
@@ -253,12 +246,13 @@ export {
   type BaseShape,
   BASE_SHAPE_KEYS,
   BASE_SHAPE_KEY_SET,
-  type SectionDirection,
-  SECTION_DIRECTIONS,
 } from "@open-draw/document";
 
 // Re-exported built-in shapes (ADR-0008 D1)
 export {
+  GROUP_KIND,
+  GROUP_CAPABILITIES,
+  hitTestGroup,
   RECT_KIND,
   RECT_CAPABILITIES,
   hitTestRect,
@@ -282,6 +276,7 @@ export {
   documentToSvg,
   shapeToSvg,
   fallbackShapeToSvg,
+  escapeXml,
   resolveShapeFill,
   type ResolvedFill,
   RENDER_STYLES,

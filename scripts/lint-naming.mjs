@@ -28,7 +28,12 @@ for (const pkg of fs.readdirSync(packagesDir)) {
 // 2. Verify all files and directories in packages/ are kebab-case
 function checkDir(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === "node_modules" || entry.name === "dist" || entry.name.startsWith(".")) {
+    if (
+      entry.name === "node_modules" ||
+      entry.name === "dist" ||
+      entry.name.startsWith(".") ||
+      entry.name === "LICENSE"
+    ) {
       continue;
     }
     const fullPath = path.join(dir, entry.name);

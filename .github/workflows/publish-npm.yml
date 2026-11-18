@@ -68,6 +68,6 @@ jobs:
 
       - name: Publish to npm
         if: ${{ !inputs.dry_run }}
-        run: pnpm --filter @open-draw/canvas publish --access public
+        run: pnpm --filter @open-draw/canvas publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

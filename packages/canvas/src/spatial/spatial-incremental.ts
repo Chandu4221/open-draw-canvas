@@ -1,12 +1,7 @@
 // Incremental update mechanics for 2D STR R-Tree (R-002, R-008, R-010, R-016, ADR-0011).
 // Provides sub-millisecond leaf mutation and ancestor box updates without full tree rebuilds.
-import type { BoundingBox, ShapeId } from "@open-draw/contracts";
-import {
-  CONTAINER_KINDS,
-  absoluteBoundingBox,
-  subtreeOf,
-  type Document,
-} from "@open-draw/document";
+import { SHAPE_KINDS, type BoundingBox, type ShapeId } from "@open-draw/contracts";
+import { absoluteBoundingBox, isCustomShape, subtreeOf, type Document } from "@open-draw/document";
 import {
   computeEnclosingFromItems,
   computeEnclosingFromNodes,
@@ -20,9 +15,15 @@ import {
 
 export const DEFAULT_MAX_INCREMENTAL_BATCH = 64;
 
+export interface SpatialIndexUpdateItem {
+  readonly id: ShapeId;
+  readonly box: BoundingBox;
+  readonly zIndex?: number | undefined;
+}
+
 function updateNodeItem(
   node: SpatialNode,
-  updatedItem: SpatialIndexItem,
+  updatedItem: SpatialIndexUpdateItem,
   prevSpatialBox?: SpatialBoundingBox,
 ): { readonly node: SpatialNode; readonly updated: boolean } {
   if (node.isLeaf) {
@@ -43,7 +44,10 @@ function updateNodeItem(
     nextItems[foundIndex] = {
       id: updatedItem.id,
       box: updatedItem.box,
-      zIndex: updatedItem.zIndex >= 0 ? updatedItem.zIndex : existing.zIndex,
+      zIndex:
+        updatedItem.zIndex !== undefined && updatedItem.zIndex >= 0
+          ? updatedItem.zIndex
+          : existing.zIndex,
     };
     const nextBox = computeEnclosingFromItems(nextItems);
     return {
@@ -139,13 +143,13 @@ function updateNodeItem(
  */
 export function updateSpatialIndexItem(
   index: SpatialIndex,
-  updatedItem: SpatialIndexItem,
+  updatedItem: SpatialIndexItem | SpatialIndexUpdateItem,
   previousBox?: BoundingBox,
-): SpatialIndex {
-  if (index.root === null) return index;
+): SpatialIndex | null {
+  if (index.root === null) return null;
   const prevSpatialBox = previousBox ? toSpatialBox(previousBox) : undefined;
   const result = updateNodeItem(index.root, updatedItem, prevSpatialBox);
-  if (!result.updated) return index;
+  if (!result.updated) return null;
   return {
     root: result.node,
     count: index.count,
@@ -167,6 +171,8 @@ export function findIncrementalSpatialChanges(
   const prevKeys = Object.keys(prevShapes);
   const nextKeys = Object.keys(nextShapes);
   if (prevKeys.length !== nextKeys.length) return null;
+  // Sibling stacking order is derived from map insertion order (ADR-0002 D6).
+  // Any key order divergence represents a z-order permutation requiring full rebuild.
   for (let i = 0; i < prevKeys.length; i += 1) {
     if (prevKeys[i] !== nextKeys[i]) return null;
   }
@@ -196,13 +202,19 @@ export function findIncrementalSpatialChanges(
 
   if (directlyChanged.length === 0) return [];
 
-  // Expand only containers to include descendants
+  // Expand containers or custom shapes to include descendants
   const allAffected = new Set<ShapeId>();
   for (let i = 0; i < directlyChanged.length; i += 1) {
     const id = directlyChanged[i]!;
     allAffected.add(id);
     const shape = nextShapes[id]!;
-    if (CONTAINER_KINDS.has(shape.kind)) {
+    const mightHaveChildren =
+      shape.kind === SHAPE_KINDS.group ||
+      shape.kind === SHAPE_KINDS.rect ||
+      shape.meta.isContainer === true ||
+      shape.meta.container === true ||
+      isCustomShape(shape);
+    if (mightHaveChildren) {
       const subtree = subtreeOf(nextDoc, id);
       for (let s = 0; s < subtree.length; s += 1) {
         allAffected.add(subtree[s]!.id);
@@ -224,26 +236,29 @@ export function updateSpatialIndexFromDocument(
   prevDoc: Document,
   nextDoc: Document,
   affectedShapeIds: readonly ShapeId[],
-): SpatialIndex {
+): SpatialIndex | null {
   let currentIndex = index;
   for (let i = 0; i < affectedShapeIds.length; i += 1) {
     const id = affectedShapeIds[i]!;
     const nextShape = nextDoc.shapes[id];
     const prevShape = prevDoc.shapes[id];
-    if (nextShape === undefined || prevShape === undefined) continue;
+    if (nextShape === undefined || prevShape === undefined) return null;
 
     const nextAbsBox = absoluteBoundingBox(nextDoc, nextShape);
     const prevAbsBox = absoluteBoundingBox(prevDoc, prevShape);
 
-    currentIndex = updateSpatialIndexItem(
+    const nextIndex = updateSpatialIndexItem(
       currentIndex,
       {
         id,
         box: nextAbsBox,
-        zIndex: -1,
       },
       prevAbsBox,
     );
+    if (nextIndex === null) {
+      return null;
+    }
+    currentIndex = nextIndex;
   }
   return currentIndex;
 }

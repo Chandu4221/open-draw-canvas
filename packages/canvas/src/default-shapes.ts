@@ -4,7 +4,9 @@ import { SHAPE_KINDS } from "@open-draw/contracts";
 import type { LineShape, PenPathShape } from "@open-draw/document";
 import {
   ELLIPSE_CAPABILITIES,
+  GROUP_CAPABILITIES,
   hitTestEllipse,
+  hitTestGroup,
   hitTestLine,
   hitTestPenPath,
   hitTestRect,
@@ -17,6 +19,11 @@ import {
 import type { ShapeKindRegistration } from "./register-shape-kind";
 
 export const DEFAULT_SHAPE_REGISTRATIONS: readonly ShapeKindRegistration[] = Object.freeze([
+  {
+    kind: SHAPE_KINDS.group,
+    capabilities: GROUP_CAPABILITIES,
+    hitTest: (box, _shape, point) => hitTestGroup(box, point),
+  },
   {
     kind: SHAPE_KINDS.rect,
     capabilities: RECT_CAPABILITIES,

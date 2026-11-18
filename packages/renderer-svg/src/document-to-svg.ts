@@ -2,24 +2,16 @@
 // never truth; R-020: the renderer never holds canonical state; ADR-0003 D3).
 // Pure Document → string (R-008). Presentation constants are registry data, not
 // stringly internals (R-005).
-import type {
-  BoundingBox,
-  BuiltinShapeKind,
-  DeviceType,
-  ShapeId,
-  StyleId,
-} from "@open-draw/contracts";
-import { isRootId, SHAPE_KINDS, SHAPE_KIND_LABELS, STYLE_PROFILES } from "@open-draw/contracts";
+import type { BoundingBox, BuiltinShapeKind, ShapeId } from "@open-draw/contracts";
+import { isRootId, SHAPE_KINDS, SHAPE_KIND_LABELS } from "@open-draw/contracts";
 import {
   absoluteBoundingBox,
-  ancestorsOf,
   shapeListInOrder,
   type Document,
   type LineShape,
   type PenPathShape,
   type Shape,
 } from "@open-draw/document";
-import { CRAYON_SHAPE_RENDERERS } from "./styles/crayon";
 import { escapeXml } from "./escape-xml";
 import {
   CONTENT_FILL_FALLBACK,
@@ -33,11 +25,6 @@ export { resolveShapeFill, type ResolvedFill };
 export const RENDER_STYLES = {
   contentFill: CONTENT_FILL_FALLBACK,
   contentStroke: CONTENT_STROKE_FALLBACK,
-  pageFill: "none",
-  pageStroke: "#8a94a6",
-  pageDasharray: "8 6",
-  sectionFill: "#f5f7fa",
-  sectionStroke: "#8a94a6",
   selectionStroke: "#2563eb",
   selectionDasharray: "4 4",
   multiSelectionStroke: "#2563eb",
@@ -55,9 +42,6 @@ export interface RendererFallbackEvent {
 export type ShapeSvgRenderer = (shape: Shape, box: BoundingBox, options?: RenderOptions) => string;
 
 export interface RenderOptions {
-  readonly activeDeviceType?: DeviceType | undefined;
-  readonly activeDeviceTypes?: Readonly<Record<ShapeId, DeviceType | undefined>> | undefined;
-  readonly styleProfile?: StyleId | undefined;
   readonly onFallback?: ((event: RendererFallbackEvent) => void) | undefined;
   readonly customRenderers?: Readonly<Record<string, ShapeSvgRenderer>> | undefined;
   readonly includeAnnotations?: boolean | undefined;
@@ -83,10 +67,17 @@ export function fallbackShapeToSvg(shape: Shape, box: BoundingBox): string {
 }
 
 export const DEFAULT_SHAPE_RENDERERS: Readonly<Record<string, ShapeSvgRenderer>> = Object.freeze({
-  [SHAPE_KINDS.page]: (shape, box) =>
-    `<rect x="${num(box.x)}" y="${num(box.y)}" width="${num(box.width, 1)}" height="${num(box.height, 1)}" fill="${RENDER_STYLES.pageFill}" stroke="${RENDER_STYLES.pageStroke}" stroke-dasharray="${RENDER_STYLES.pageDasharray}" />`,
-  [SHAPE_KINDS.section]: (shape, box) =>
-    `<rect x="${num(box.x)}" y="${num(box.y)}" width="${num(box.width, 1)}" height="${num(box.height, 1)}" fill="${RENDER_STYLES.sectionFill}" stroke="${RENDER_STYLES.sectionStroke}" />`,
+  [SHAPE_KINDS.group]: (shape, box, options) => {
+    if (shape.fill !== undefined || shape.stroke !== undefined) {
+      const { fill, fillOpacity, defs } = resolveShapeFill(shape, "none", options);
+      const stroke = shape.stroke ? ` stroke="${escapeXml(shape.stroke)}"` : "";
+      const strokeWidthAttr =
+        shape.strokeWidth !== undefined ? ` stroke-width="${num(shape.strokeWidth, 1)}"` : "";
+      const fillOpacityAttr = fillOpacity !== undefined ? ` fill-opacity="${fillOpacity}"` : "";
+      return `${defs ?? ""}<rect x="${num(box.x)}" y="${num(box.y)}" width="${num(box.width, 1)}" height="${num(box.height, 1)}" fill="${fill}"${stroke}${strokeWidthAttr}${fillOpacityAttr} />`;
+    }
+    return "";
+  },
   [SHAPE_KINDS.rect]: (shape, box, options) => {
     const { fill, fillOpacity, defs } = resolveShapeFill(shape, RENDER_STYLES.contentFill, options);
     const stroke = escapeXml(shape.stroke ?? RENDER_STYLES.contentStroke);
@@ -127,25 +118,11 @@ export const DEFAULT_SHAPE_RENDERERS: Readonly<Record<string, ShapeSvgRenderer>>
   },
 });
 
-/**
- * Resolves the effective style profile for a shape from its root ancestor (R-026).
- */
-export function resolveEffectiveStyle(doc: Document, shape: Shape): StyleId {
-  if (isRootId(shape.parentId)) {
-    return shape.meta.style ?? STYLE_PROFILES.minimal;
-  }
-  const ancestors = ancestorsOf(doc, shape);
-  const root = ancestors[ancestors.length - 1];
-  return root?.meta.style ?? STYLE_PROFILES.minimal;
-}
-
 export function shapeToSvg(shape: Shape, box: BoundingBox, options?: RenderOptions): string {
   let renderer: ShapeSvgRenderer | undefined;
 
   if (options?.customRenderers?.[shape.kind] !== undefined) {
     renderer = options.customRenderers[shape.kind];
-  } else if (options?.styleProfile === STYLE_PROFILES.crayon) {
-    renderer = CRAYON_SHAPE_RENDERERS[shape.kind] ?? DEFAULT_SHAPE_RENDERERS[shape.kind];
   } else {
     renderer = DEFAULT_SHAPE_RENDERERS[shape.kind];
   }
@@ -172,43 +149,16 @@ export function shapeToSvg(shape: Shape, box: BoundingBox, options?: RenderOptio
     rendered = `${rendered}${clip}${text}`;
   }
 
-  // R-029: Presentation-only ghost rendering for shapes hidden on active device type
-  if (
-    options?.activeDeviceType !== undefined &&
-    shape.meta.hiddenOn?.includes(options.activeDeviceType)
-  ) {
-    return `<g opacity="0.35" stroke-dasharray="4 4">${rendered}</g>`;
-  }
   return rendered;
 }
 
-function resolveShapeRootId(document: Document, shape: Shape): ShapeId | undefined {
-  if (isRootId(shape.parentId)) {
-    return shape.id;
-  }
-  const ancestors = ancestorsOf(document, shape);
-  const root = ancestors.find((a) => isRootId(a.parentId));
-  return root?.id;
-}
-
-// Render a single shape to SVG with root style resolution and optional annotation/id wrapper.
+// Render a single shape to SVG with optional annotation/id wrapper.
 export function renderSingleShapeSvg(
   document: Document,
   shape: Shape,
   options?: RenderOptions,
 ): string {
-  const effectiveStyle = options?.styleProfile ?? resolveEffectiveStyle(document, shape);
-  const rootId = resolveShapeRootId(document, shape);
-  const effectiveDevice =
-    rootId !== undefined && options?.activeDeviceTypes !== undefined
-      ? (options.activeDeviceTypes[rootId] ?? options?.activeDeviceType)
-      : options?.activeDeviceType;
-
-  const shapeOptions: RenderOptions | undefined =
-    effectiveStyle !== options?.styleProfile || effectiveDevice !== options?.activeDeviceType
-      ? { ...options, styleProfile: effectiveStyle, activeDeviceType: effectiveDevice }
-      : options;
-  const rendered = shapeToSvg(shape, absoluteBoundingBox(document, shape), shapeOptions);
+  const rendered = shapeToSvg(shape, absoluteBoundingBox(document, shape), options);
 
   if (options?.includeAnnotations === true) {
     const shapeIdAttr = `data-shape-id="${escapeXml(shape.id)}"`;
@@ -237,7 +187,6 @@ export function renderSingleShapeSvg(
 }
 
 // The whole document in pre-order walk order (structural order).
-// Style selection is root-resolved (R-026).
 // Fallback emission surfaces via the pure options callback without singletons (R-008, ADR-0003 D3).
 export function documentToSvg(document: Document, options?: RenderOptions): string {
   const ordered = shapeListInOrder(document);

@@ -1,7 +1,7 @@
 // Canvas controller entry point (R-004, R-008, R-036, ADR-0003 D1).
 // Encapsulates machine transition, camera transform, selection state,
 // shape-kind capabilities, and action dispatch.
-import type { BoundingBox, CapabilityId, DeviceType, Point, ShapeId } from "@open-draw/contracts";
+import type { BoundingBox, CapabilityId, Point, ShapeId } from "@open-draw/contracts";
 import { type Document, shapeListInOrder } from "@open-draw/document";
 import type { ActionId, KeyboardEventDescriptor } from "@open-draw/input";
 import { resolveKeyBinding } from "@open-draw/input";
@@ -43,15 +43,14 @@ import {
 } from "./selection";
 
 export interface CanvasOptions {
+  readonly instanceId?: string | undefined;
   readonly camera?: Camera;
   readonly selection?: Selection;
   readonly shapeKinds?: ShapeKindRegistry | readonly ShapeKindRegistration[];
-  readonly activeDeviceType?: DeviceType;
-  readonly activeDeviceTypes?: Readonly<Record<ShapeId, DeviceType | undefined>>;
-  readonly visibleChipRootIds?: readonly ShapeId[] | ReadonlySet<ShapeId>;
 }
 
 export interface CanvasController {
+  getInstanceId(): string | undefined;
   getCamera(): Camera;
   setCamera(camera: Camera): void;
   panBy(screenDelta: Point): void;
@@ -62,8 +61,8 @@ export interface CanvasController {
   getSelection(): Selection;
   getSelectedId(): ShapeId | null;
   getSelectedIds(): readonly ShapeId[];
-  select(id: ShapeId): void;
-  selectMany(ids: readonly ShapeId[]): void;
+  select(id: ShapeId, doc?: Document): void;
+  selectMany(ids: readonly ShapeId[], doc?: Document): void;
   toggleSelection(id: ShapeId): void;
   clearSelection(): void;
   isSelected(id: ShapeId): boolean;
@@ -88,27 +87,17 @@ export interface CanvasController {
   emit(event: ControllerEvent): void;
   batch(fn: () => void): void;
   clearListeners(): void;
-
-  getActiveDeviceType(rootId?: ShapeId): DeviceType | undefined;
-  setActiveDeviceType(deviceType?: DeviceType, rootId?: ShapeId): void;
-  getActiveDeviceTypes(): Readonly<Record<ShapeId, DeviceType | undefined>>;
-
-  getVisibleChipRootIds(): ReadonlySet<ShapeId>;
-  isRootChipsVisible(rootId: ShapeId): boolean;
-  toggleRootChipsVisible(rootId: ShapeId): void;
-  setRootChipsVisible(rootId: ShapeId, visible: boolean): void;
 }
 
+let defaultInstanceSeq = 0;
+
 export function createCanvas(options: CanvasOptions = {}): CanvasController {
+  const instanceId =
+    options.instanceId !== undefined && options.instanceId !== ""
+      ? options.instanceId
+      : `canvas-${++defaultInstanceSeq}`;
   let camera = clampCamera(options.camera ?? DEFAULT_CAMERA);
   let selection = options.selection ?? EMPTY_SELECTION;
-  let activeDeviceType = options.activeDeviceType;
-  const scopedDeviceTypes = new Map<ShapeId, DeviceType | undefined>(
-    options.activeDeviceTypes !== undefined
-      ? (Object.entries(options.activeDeviceTypes) as [ShapeId, DeviceType | undefined][])
-      : [],
-  );
-  const visibleChipRootIds = new Set<ShapeId>(options.visibleChipRootIds ?? []);
   let machine = INITIAL_MACHINE_STATE;
   let shapeKindRegistry: ShapeKindRegistry =
     options.shapeKinds === undefined
@@ -237,16 +226,19 @@ export function createCanvas(options: CanvasOptions = {}): CanvasController {
           cachedSpatialDoc = doc;
           return cachedSpatialIndex;
         }
-        cachedSpatialIndex = updateSpatialIndexFromDocument(
+        const updatedIndex = updateSpatialIndexFromDocument(
           cachedSpatialIndex,
           cachedSpatialDoc,
           doc,
           incrementalChanges,
         );
-        cachedSpatialDoc = doc;
-        return cachedSpatialIndex;
-      }
-      if (isSpatialEquivalent(cachedSpatialDoc, doc)) {
+        if (updatedIndex !== null) {
+          cachedSpatialIndex = updatedIndex;
+          cachedSpatialDoc = doc;
+          return cachedSpatialIndex;
+        }
+        // Incremental update failed to locate item -> fall through to full rebuild
+      } else if (isSpatialEquivalent(cachedSpatialDoc, doc)) {
         cachedSpatialDoc = doc;
         return cachedSpatialIndex;
       }
@@ -257,6 +249,7 @@ export function createCanvas(options: CanvasOptions = {}): CanvasController {
   }
 
   return {
+    getInstanceId: () => instanceId,
     getCamera: () => camera,
     setCamera: (next) => {
       camera = clampCamera(next);
@@ -276,12 +269,16 @@ export function createCanvas(options: CanvasOptions = {}): CanvasController {
     getSelection: () => selection,
     getSelectedId: () => singleSelected(selection),
     getSelectedIds: () => selectedIds(selection),
-    select: (id) => {
+    select: (id, doc) => {
+      if (doc !== undefined && doc.shapes[id] === undefined) {
+        return;
+      }
       selection = selectOne(id);
       emit(CONTROLLER_EVENTS.selectionChanged);
     },
-    selectMany: (ids) => {
-      selection = selectMany(ids);
+    selectMany: (ids, doc) => {
+      const filtered = doc !== undefined ? ids.filter((id) => doc.shapes[id] !== undefined) : ids;
+      selection = selectMany(filtered);
       emit(CONTROLLER_EVENTS.selectionChanged);
     },
     toggleSelection: (id) => {
@@ -345,43 +342,6 @@ export function createCanvas(options: CanvasOptions = {}): CanvasController {
     clearListeners: () => {
       for (const set of Object.values(listeners)) {
         set.clear();
-      }
-    },
-
-    getActiveDeviceType: (rootId) => {
-      if (rootId !== undefined && scopedDeviceTypes.has(rootId)) {
-        return scopedDeviceTypes.get(rootId);
-      }
-      return activeDeviceType;
-    },
-    setActiveDeviceType: (deviceType, rootId) => {
-      if (rootId !== undefined) {
-        if (deviceType === undefined) {
-          scopedDeviceTypes.delete(rootId);
-        } else {
-          scopedDeviceTypes.set(rootId, deviceType);
-        }
-      } else {
-        activeDeviceType = deviceType;
-      }
-    },
-    getActiveDeviceTypes: () =>
-      Object.fromEntries(scopedDeviceTypes.entries()) as Record<ShapeId, DeviceType | undefined>,
-
-    getVisibleChipRootIds: () => visibleChipRootIds,
-    isRootChipsVisible: (rootId) => visibleChipRootIds.has(rootId),
-    toggleRootChipsVisible: (rootId) => {
-      if (visibleChipRootIds.has(rootId)) {
-        visibleChipRootIds.delete(rootId);
-      } else {
-        visibleChipRootIds.add(rootId);
-      }
-    },
-    setRootChipsVisible: (rootId, visible) => {
-      if (visible) {
-        visibleChipRootIds.add(rootId);
-      } else {
-        visibleChipRootIds.delete(rootId);
       }
     },
   };

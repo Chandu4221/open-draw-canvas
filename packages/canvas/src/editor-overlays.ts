@@ -62,7 +62,7 @@ export function computeEditorOverlays(options: EditorOverlayOptions): readonly s
     const boxes: BoundingBox[] = [];
     for (const id of activeSelectedIds) {
       const shape = doc.shapes[id];
-      if (shape !== undefined && shape.kind !== "page") {
+      if (shape !== undefined) {
         let box = absoluteBoundingBox(doc, shape);
         const isSelectedMoved =
           gesture !== null &&

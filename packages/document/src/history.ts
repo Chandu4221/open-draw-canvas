@@ -17,6 +17,7 @@ export const EMPTY_HISTORY: HistoryState = { undoStack: [], redoStack: [] };
 export interface UndoRedoResult {
   readonly document: Document;
   readonly history: HistoryState;
+  readonly error?: Error | undefined;
 }
 
 export function recordHistory(
@@ -38,14 +39,25 @@ export function undo(document: Document, history: HistoryState): UndoRedoResult 
   if (latest === undefined) {
     return null;
   }
-  const result = applyTransaction(document, latest);
-  return {
-    document: result.document,
-    history: {
-      undoStack: history.undoStack.slice(0, -1),
-      redoStack: [...history.redoStack, createTransaction(result.inverse)],
-    },
-  };
+  try {
+    const result = applyTransaction(document, latest);
+    return {
+      document: result.document,
+      history: {
+        undoStack: history.undoStack.slice(0, -1),
+        redoStack: [...history.redoStack, createTransaction(result.inverse)],
+      },
+    };
+  } catch (error) {
+    return {
+      document,
+      history: {
+        undoStack: history.undoStack.slice(0, -1),
+        redoStack: history.redoStack,
+      },
+      error: error instanceof Error ? error : new Error(String(error)),
+    };
+  }
 }
 
 export function redo(
@@ -57,17 +69,28 @@ export function redo(
   if (latest === undefined) {
     return null;
   }
-  const result = applyTransaction(document, latest);
-  const nextUndoStack = [...history.undoStack, createTransaction(result.inverse)];
-  const trimmedUndoStack =
-    nextUndoStack.length > maxDepth
-      ? nextUndoStack.slice(nextUndoStack.length - maxDepth)
-      : nextUndoStack;
-  return {
-    document: result.document,
-    history: {
-      undoStack: trimmedUndoStack,
-      redoStack: history.redoStack.slice(0, -1),
-    },
-  };
+  try {
+    const result = applyTransaction(document, latest);
+    const nextUndoStack = [...history.undoStack, createTransaction(result.inverse)];
+    const trimmedUndoStack =
+      nextUndoStack.length > maxDepth
+        ? nextUndoStack.slice(nextUndoStack.length - maxDepth)
+        : nextUndoStack;
+    return {
+      document: result.document,
+      history: {
+        undoStack: trimmedUndoStack,
+        redoStack: history.redoStack.slice(0, -1),
+      },
+    };
+  } catch (error) {
+    return {
+      document,
+      history: {
+        undoStack: history.undoStack,
+        redoStack: history.redoStack.slice(0, -1),
+      },
+      error: error instanceof Error ? error : new Error(String(error)),
+    };
+  }
 }

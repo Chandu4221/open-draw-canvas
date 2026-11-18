@@ -1,9 +1,7 @@
-import type { DeviceType, PluginId, StyleId } from "@open-draw/contracts";
-import {
-  DEVICE_TYPE_BY_VALUE,
-  STYLE_PROFILE_BY_VALUE,
-  isValidPluginId,
-} from "@open-draw/contracts";
+// Meta validation for shapes (R-006, R-044).
+// Validates meta object structure, prototype pollution guards, and pluginData envelope.
+import type { PluginId } from "@open-draw/contracts";
+import { isValidPluginId } from "@open-draw/contracts";
 import { DocumentError } from "./errors";
 import type { ShapeMeta } from "./shape";
 
@@ -11,69 +9,43 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
+export function isJsonSerializable(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  const t = typeof value;
+  if (t === "number") return Number.isFinite(value);
+  if (t === "string" || t === "boolean") return true;
+  if (t === "bigint" || t === "symbol" || t === "function") return false;
+  try {
+    JSON.stringify(value, (_, val) => {
+      if (typeof val === "bigint" || typeof val === "function" || typeof val === "symbol") {
+        throw new TypeError("not serializable");
+      }
+      if (typeof val === "number" && !Number.isFinite(val)) {
+        throw new TypeError("not finite");
+      }
+      return val;
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-export function parseDeviceType(value: unknown): DeviceType {
-  if (typeof value !== "string") {
-    throw new DocumentError(
-      "invalidMeta",
-      `device type must be a string: ${JSON.stringify(value)}`,
-    );
+export function parseMeta(value: unknown): ShapeMeta {
+  if (value === undefined || value === null) {
+    return {};
   }
-  const deviceType = DEVICE_TYPE_BY_VALUE[value];
-  if (deviceType === undefined) {
-    throw new DocumentError("invalidMeta", `unknown device type: ${value}`);
-  }
-  return deviceType;
-}
-
-export function parseMeta(value: unknown, isRootShape = false): ShapeMeta {
   if (!isRecord(value)) {
     throw new DocumentError("invalidMeta", "meta must be an object");
   }
-  if (!isRootShape) {
-    if (value.style !== undefined) {
-      throw new DocumentError("invalidMeta", "style may only be set on root shapes (R-026)");
-    }
-  }
-
-  let style: StyleId | undefined;
-  if (value.style !== undefined) {
-    if (typeof value.style !== "string") {
-      throw new DocumentError("invalidMeta", "meta.style must be a string");
-    }
-    style =
-      STYLE_PROFILE_BY_VALUE[value.style] ??
-      (Object.values(STYLE_PROFILE_BY_VALUE).includes(value.style as StyleId)
-        ? (value.style as StyleId)
-        : undefined);
-    if (style === undefined) {
-      throw new DocumentError("invalidMeta", `unknown style: ${value.style}`);
-    }
-  }
-
-  const order: Partial<Record<DeviceType, number>> = {};
-  if (value.order !== undefined) {
-    if (!isRecord(value.order)) {
-      throw new DocumentError("invalidMeta", "meta.order must be an object");
-    }
-    for (const [serialized, orderValue] of Object.entries(value.order)) {
-      const deviceType = parseDeviceType(serialized);
-      if (!isFiniteNumber(orderValue)) {
-        throw new DocumentError("invalidMeta", `order for ${serialized} must be a number`);
-      }
-      order[deviceType] = orderValue;
-    }
-  }
-
-  let hiddenOn: readonly DeviceType[] | undefined;
-  if (value.hiddenOn !== undefined) {
-    if (!Array.isArray(value.hiddenOn)) {
-      throw new DocumentError("invalidMeta", "meta.hiddenOn must be an array");
-    }
-    hiddenOn = value.hiddenOn.map(parseDeviceType);
+  if (
+    Object.prototype.hasOwnProperty.call(value, "__proto__") ||
+    Object.prototype.hasOwnProperty.call(value, "constructor")
+  ) {
+    throw new DocumentError(
+      "invalidMeta",
+      "prototype pollution keys (__proto__, constructor) are forbidden in meta",
+    );
   }
 
   // R-044: Validate pluginData envelope (PluginId syntax), but treat contents as opaque
@@ -87,22 +59,22 @@ export function parseMeta(value: unknown, isRootShape = false): ShapeMeta {
       if (!isValidPluginId(key)) {
         throw new DocumentError("invalidMeta", `invalid plugin id in meta.pluginData: ${key}`);
       }
+      if (!isJsonSerializable(pluginVal)) {
+        throw new DocumentError("invalidMeta", `plugin data for ${key} must be JSON-serializable`);
+      }
       pluginData[key as PluginId] = pluginVal;
     }
   }
 
   const otherProps: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(value)) {
-    if (k !== "order" && k !== "hiddenOn" && k !== "pluginData" && k !== "style") {
+    if (k !== "pluginData") {
       otherProps[k] = v;
     }
   }
 
   return {
     ...otherProps,
-    order,
-    ...(hiddenOn === undefined ? {} : { hiddenOn }),
     ...(pluginData === undefined ? {} : { pluginData }),
-    ...(style === undefined ? {} : { style }),
   };
 }

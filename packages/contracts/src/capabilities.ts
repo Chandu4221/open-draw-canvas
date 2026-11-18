@@ -8,6 +8,7 @@ export const CAPABILITIES = {
   movable: "movable",
   textLabel: "text-label",
   freehandPath: "freehand-path",
+  container: "container",
 } as const;
 
 export type CapabilityId = (typeof CAPABILITIES)[keyof typeof CAPABILITIES];

@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   CAPABILITIES,
   CAPABILITY_VALUES,
-  DEVICE_TYPES,
-  DEVICE_TYPE_BY_VALUE,
   isValidCustomShapeKind,
   isValidPluginId,
   MAX_DOCUMENT_DEPTH,
   MAX_HISTORY_DEPTH,
+  MAX_DOCUMENT_SHAPE_COUNT,
+  MAX_PEN_PATH_POINTS,
+  MAX_DOCUMENT_BYTE_SIZE,
   parseCustomShapeKind,
   parsePluginId,
   SHAPE_KINDS,
@@ -16,8 +17,6 @@ import {
   FILL_STYLES,
   FILL_STYLE_VALUES,
   SPATIAL_SCOPES,
-  STYLE_PROFILES,
-  STYLE_PROFILE_BY_VALUE,
 } from "./index";
 
 describe("capabilities", () => {
@@ -80,23 +79,18 @@ describe("document-limits", () => {
   it("exposes MAX_HISTORY_DEPTH as 100 to prevent unbounded history growth", () => {
     expect(MAX_HISTORY_DEPTH).toBe(100);
   });
-});
 
-describe("device-types", () => {
-  it("exposes device types and reverse lookup", () => {
-    expect(DEVICE_TYPES.mobile).toBe("mobile");
-    expect(DEVICE_TYPES.desktop).toBe("desktop");
-    expect(DEVICE_TYPE_BY_VALUE.mobile).toBe("mobile");
+  it("exposes document envelope limits (MAX_DOCUMENT_SHAPE_COUNT, MAX_PEN_PATH_POINTS, MAX_DOCUMENT_BYTE_SIZE)", () => {
+    expect(MAX_DOCUMENT_SHAPE_COUNT).toBe(10_000);
+    expect(MAX_PEN_PATH_POINTS).toBe(2_000);
+    expect(MAX_DOCUMENT_BYTE_SIZE).toBe(10 * 1024 * 1024);
   });
 });
 
-describe("style-profiles", () => {
-  it("exposes style profiles registry", () => {
-    expect(STYLE_PROFILES.minimal).toBe("minimal");
-    expect(STYLE_PROFILES.crayon).toBe("crayon");
-    expect(STYLE_PROFILE_BY_VALUE.minimal).toBe("minimal");
-    expect(STYLE_PROFILE_BY_VALUE.crayon).toBe("crayon");
-  });
+it("includes group in built-in shape kinds and labels", () => {
+  expect(SHAPE_KINDS.group).toBe("group");
+  expect(SHAPE_KIND_LABELS.group).toBe("Group");
+  expect(SHAPE_KIND_VALUES.has("group")).toBe(true);
 });
 
 describe("fill-styles", () => {

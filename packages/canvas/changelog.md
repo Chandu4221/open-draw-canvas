@@ -5,6 +5,68 @@ All notable changes to the `@open-draw/canvas` package are documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-11-18
+
+### Changed / Breaking
+
+- **Standalone 2D Vector Substrate (Purity Decoupling)**:
+  - Completely stripped all Studio wireframing and responsive concepts (`DeviceType`, `DEVICE_TYPES`, `meta.order`, `meta.hiddenOn`, `SetShapeHiddenOn`, `SetShapeOrder`, and `SetRootStyle`).
+  - Removed hardcoded `page` and `section` shape kinds in favor of capability-driven containment (`CAPABILITIES.container`).
+  - Removed hardcoded wireframe style presets (`STYLE_PROFILES`, `StyleId`) from contracts in favor of pure 2D vector style render registries.
+  - Simplified `ShapeMeta` to a clean generic dictionary with namespaced plugin data isolation (`shape.meta.pluginData`) for external domain plugins.
+  - Shapes live directly under `ROOT_ID` (`canvas:root`) by default.
+  - Removed orphaned `crayon` style profile from `@open-draw/renderer-svg`; custom rendering styles are now purely driven via `options.customRenderers`.
+
+### Added
+
+- **Standard Group Shape (`group`)**: Added native `group` shape (`GROUP_KIND`, `GROUP_CAPABILITIES = [container, resizable, movable]`, `createGroup()`, and `hitTestGroup()`) with support for hierarchical grouping (`Ctrl+G`), ungrouping (`Ctrl+Shift+G`), and parent-local coordinate containment.
+- **First-Class Z-Ordering System (R-005, R-015, R-016)**: Added `ReorderShapes` command to document core with lossless exact inverse permutations for `bringToFront`, `sendToBack`, `bringForward`, `sendBackward`, and arbitrary `setOrder`. Exposed public methods on `Editor` (`bringToFront`, `sendToBack`, `bringForward`, `sendBackward`), registered action IDs in `@open-draw/input`, and bound default keyboard shortcuts (`Ctrl+]`, `Ctrl+[`, `Ctrl+Shift+]`, `Ctrl+Shift+[`).
+- **Decoupled Container Capability (R-005, ADR-0002)**: Added `CAPABILITIES.container` ("container") to contracts and decoupled shape reparenting and drag/draw drop targets from application-specific metadata.
+- **Envelope Limits & Prototype Pollution Defense (R-004, R-006)**: Added `MAX_DOCUMENT_SHAPE_COUNT` (10,000), `MAX_PEN_PATH_POINTS` (2,000), and `MAX_DOCUMENT_BYTE_SIZE` (10MB) envelope limits with typed error factories (`documentShapeCountExceeded`, `documentSizeExceeded`). Enforced prototype pollution guards (`"__proto__"`, `"constructor"`) and coordinate bounds clamping (`MAX_COORDINATE_BOUND`).
+- **Incremental Validation During Transactions**: `createDocumentFromMap` supports `validateOnlyIds` to validate only mutated shapes and their ancestor chains in $O(K)$ time during 60fps gestures instead of full document tree scans.
+
+### Fixed
+
+- **History Stack Poisoning Protection (R-006, R-018)**: Wrapped `applyTransaction` in `undo()` and `redo()` with automatic transaction eviction on failure (e.g. if targeted shapes were deleted or modified via external `setDocument({ preserveHistory: true })`), preventing the undo stack from becoming permanently wedged.
+- **Error Visibility & Fallback Handling**: Provided default `console.error` fallback for `onError` across editor pointer, keyboard, and transaction error boundaries, ensuring unhandled exceptions are never silently dropped.
+- **Move Command Validation**: Guarded `moveShapes` command against `NaN` and non-finite `dx`/`dy` inputs to prevent coordinate corruption and serialization crashes.
+- **Plugin Data Validation**: Enforced JSON-serializability validation for `setShapePluginData` and shape meta parsing to prevent runtime serialization failures.
+- **XML 1.0 Control Character Sanitization**: Sanitized disallowed XML 1.0 control characters (`\x00-\x08`, `\x0B-\x0C`, `\x0E-\x1F`, `\x7F`) in SVG text escaping.
+- **Spatial Index Incremental Tree Updates**: Updated `findIncrementalSpatialChanges` to properly expand descendants for any parent container (including custom containers) rather than relying on a hardcoded set.
+- **Release Hygiene**: Added `LICENSE` file to package distribution and enabled `--provenance` in GitHub Actions npm publishing workflow.
+
+## [0.9.5] - 2026-11-18
+
+### Changed / Breaking
+
+- **Standalone 2D Vector Substrate (Purity Decoupling)**:
+  - Completely stripped all Studio wireframing and responsive concepts (`DeviceType`, `DEVICE_TYPES`, `meta.order`, `meta.hiddenOn`, `SetShapeHiddenOn`, `SetShapeOrder`, and `SetRootStyle`).
+  - Removed hardcoded `page` and `section` shape kinds in favor of capability-driven containment (`CAPABILITIES.container`).
+  - Removed hardcoded wireframe style presets (`STYLE_PROFILES`, `StyleId`) from contracts in favor of pure 2D vector style render registries.
+  - Simplified `ShapeMeta` to a clean generic dictionary with namespaced plugin data isolation (`shape.meta.pluginData`) for external domain plugins.
+  - Shapes live directly under `ROOT_ID` (`canvas:root`) by default.
+
+### Added
+
+- **Standard Group Shape (`group`)**: Added native `group` shape (`GROUP_KIND`, `GROUP_CAPABILITIES = [container, resizable, movable]`, `createGroup()`, and `hitTestGroup()`) with support for hierarchical grouping (`Ctrl+G`), ungrouping (`Ctrl+Shift+G`), and parent-local coordinate containment.
+- **First-Class Z-Ordering System (R-005, R-015, R-016)**: Added `ReorderShapes` command to document core with lossless exact inverse permutations for `bringToFront`, `sendToBack`, `bringForward`, `sendBackward`, and arbitrary `setOrder`. Exposed public methods on `Editor` (`bringToFront`, `sendToBack`, `bringForward`, `sendBackward`), registered action IDs in `@open-draw/input`, and bound default keyboard shortcuts (`Ctrl+]`, `Ctrl+[`, `Ctrl+Shift+]`, `Ctrl+Shift+[`).
+- **Decoupled Container Capability (R-005, ADR-0002)**: Added `CAPABILITIES.container` ("container") to contracts and decoupled shape reparenting and drag/draw drop targets from application-specific metadata.
+- **Envelope Limits & Prototype Pollution Defense (R-004, R-006)**: Added `MAX_DOCUMENT_SHAPE_COUNT` (10,000), `MAX_PEN_PATH_POINTS` (2,000), and `MAX_DOCUMENT_BYTE_SIZE` (10MB) envelope limits with typed error factories (`documentShapeCountExceeded`, `documentSizeExceeded`). Enforced prototype pollution guards (`"__proto__"`, `"constructor"`) and coordinate bounds clamping (`MAX_COORDINATE_BOUND`).
+- **Lossless Freehand & Line Scaling**: Preserved original point distributions (`pointsSnapshot`) in `setShapeBoundingBox` commands for pen-path and line geometries across scaling and undo/redo cycles.
+
+### Fixed
+
+- **Studio Boundary Purification (R-001, ADR-0001)**: Completely removed Studio-specific root-chip APIs (`visibleChipRootIds`, `setRootChipsVisible`, etc.) from canvas controller and purged `"chipId"` from reserved custom data keys; deprecated `setShapeOrder` in favor of visual z-ordering.
+- **Safe Multi-Editor Isolation by Default (R-008, ADR-0008)**: Auto-generates instance IDs when omitted, scopes shape ID generator seeds per instance, and isolates global keyboard shortcuts to the active focused editor.
+- **Pen Gesture Decimation & Error Boundary**: Downsamples points exceeding `MAX_PEN_PATH_POINTS` during gestures, and routes gesture commit exceptions through optional `onError` callback without crashing DOM event listeners.
+- **Stale Paste Prevention & External Clipboard Safety (R-006, P1-8)**: Prevents falling back to stale in-memory clipboard data when system clipboard contains external non-OpenDraw content.
+- **Coordinate Bounds Enforcement Across Gestures**: Clamped world coordinates and relative bounds across draw and reparent gesture pipelines.
+- **FSM Exhaustiveness & Resiliency (R-006, ADR-0008)**: Guaranteed finite state machine transitions fallback cleanly to current state on unhandled events, preventing undefined transitions.
+- **Snap Solver Allocation Overhead**: Cached shape child hierarchy during active gestures, eliminating full tree allocations on every 60fps pointermove event.
+- **Incremental Spatial Index Updates (ADR-0011, R-016)**: Bypassed unconditional spatial index invalidations on pure non-structural moves/resizes, enabling sub-millisecond STR spatial index updates.
+- **TypeScript NodeNext Dual Declaration Packaging (ADR-0003)**: Properly mapped `./dist/index.d.ts` for ESM and `./dist/index.d.cts` for CommonJS in package exports.
+- **Hygiene & Security Guards**: Re-exported `escapeXml` from `@open-draw/renderer-svg`, added prototype pollution guards to `customData`, and fail loudly with typed `CanvasError` on unregistered custom shape insertion.
+
 ## [0.9.4] - 2026-11-16
 
 ### Added

@@ -7,13 +7,11 @@ export const COMMANDS = {
   reparentShape: "ReparentShape",
   moveShapes: "MoveShapes",
   setShapeBoundingBox: "SetShapeBoundingBox",
-  setRootStyle: "SetRootStyle",
-  setShapeHiddenOn: "SetShapeHiddenOn",
-  setShapeOrder: "SetShapeOrder",
   setShapeStyle: "SetShapeStyle",
   setShapeContent: "SetShapeContent",
   duplicateShapes: "DuplicateShapes",
   setShapePluginData: "SetShapePluginData",
+  reorderShapes: "ReorderShapes",
 } as const;
 
 export type CommandId = (typeof COMMANDS)[keyof typeof COMMANDS];

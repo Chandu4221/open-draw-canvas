@@ -9,6 +9,7 @@ import {
   COMMANDS,
   pruneSelectedDescendants,
   redo,
+  REORDER_OPERATIONS,
   subtreeOf,
   undo,
   type Command,
@@ -41,7 +42,10 @@ export interface KeyboardBindingContext {
   readonly execute: (commands: readonly Command[]) => void;
   readonly render: () => void;
   readonly nextShapeId: (doc?: Document) => ShapeId;
+  readonly onError?: ((error: unknown) => void) | undefined;
 }
+
+let activeFocusedInstanceId: string | null = null;
 
 export function attachKeyboardListeners(
   ctx: KeyboardBindingContext,
@@ -59,6 +63,10 @@ export function attachKeyboardListeners(
     execute,
     render,
   } = ctx;
+
+  const markActive = (): void => {
+    activeFocusedInstanceId = canvas.getInstanceId() ?? null;
+  };
 
   let copySequence = 0;
   let clipboard: {
@@ -135,6 +143,17 @@ export function attachKeyboardListeners(
       return;
     }
 
+    const isGlobalTarget =
+      !target ||
+      target === (typeof window !== "undefined" ? (window as unknown as HTMLElement) : null) ||
+      target === (typeof document !== "undefined" ? document.body : null);
+    if (isGlobalTarget) {
+      const myInstanceId = canvas.getInstanceId();
+      if (activeFocusedInstanceId !== null && myInstanceId !== activeFocusedInstanceId) {
+        return;
+      }
+    }
+
     const descriptor: KeyboardEventDescriptor = {
       code: event.code,
       ctrlKey: event.ctrlKey,
@@ -162,7 +181,8 @@ export function attachKeyboardListeners(
             shapes.push(...subtreeOf(doc, topId));
           }
           copySequence += 1;
-          const copyId = `cp-${copySequence}`;
+          const inst = canvas.getInstanceId?.() ?? "0";
+          const copyId = `cp-${inst}-${copySequence}`;
           clipboard = { copyId, shapes, topLevelIds, count: 0 };
           if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
             try {
@@ -339,9 +359,8 @@ export function attachKeyboardListeners(
                   }
                 }
               } catch {
-                // Ignore non-open-draw clipboard text
+                // Ignore non-open-draw clipboard text without pasting stale local shapes
               }
-              fallbackToLocal();
             })
             .catch(() => {
               fallbackToLocal();
@@ -361,6 +380,7 @@ export function attachKeyboardListeners(
         break;
       case ACTIONS.undo: {
         event.preventDefault();
+        resetGesture();
         const undone = undo(getDoc(), getHistory());
         if (undone !== null) {
           setDoc(undone.document);
@@ -373,6 +393,7 @@ export function attachKeyboardListeners(
       }
       case ACTIONS.redo: {
         event.preventDefault();
+        resetGesture();
         const redone = redo(getDoc(), getHistory());
         if (redone !== null) {
           setDoc(redone.document);
@@ -420,6 +441,62 @@ export function attachKeyboardListeners(
         }
         break;
       }
+      case ACTIONS.bringToFront: {
+        event.preventDefault();
+        const ids = canvas.getSelectedIds();
+        if (ids.length > 0) {
+          execute([
+            {
+              type: COMMANDS.reorderShapes,
+              ids,
+              operation: REORDER_OPERATIONS.bringToFront,
+            },
+          ]);
+        }
+        break;
+      }
+      case ACTIONS.bringForward: {
+        event.preventDefault();
+        const ids = canvas.getSelectedIds();
+        if (ids.length > 0) {
+          execute([
+            {
+              type: COMMANDS.reorderShapes,
+              ids,
+              operation: REORDER_OPERATIONS.bringForward,
+            },
+          ]);
+        }
+        break;
+      }
+      case ACTIONS.sendBackward: {
+        event.preventDefault();
+        const ids = canvas.getSelectedIds();
+        if (ids.length > 0) {
+          execute([
+            {
+              type: COMMANDS.reorderShapes,
+              ids,
+              operation: REORDER_OPERATIONS.sendBackward,
+            },
+          ]);
+        }
+        break;
+      }
+      case ACTIONS.sendToBack: {
+        event.preventDefault();
+        const ids = canvas.getSelectedIds();
+        if (ids.length > 0) {
+          execute([
+            {
+              type: COMMANDS.reorderShapes,
+              ids,
+              operation: REORDER_OPERATIONS.sendToBack,
+            },
+          ]);
+        }
+        break;
+      }
       case ACTIONS.selectTool:
         event.preventDefault();
         setTool(TOOLS.select);
@@ -451,12 +528,46 @@ export function attachKeyboardListeners(
     if (event.code === KEY_CODES.space) setSpacePressed(false);
   }
 
+  const safeKeyDown = (event: KeyboardEvent): void => {
+    try {
+      onKeyDown(event);
+    } catch (err) {
+      ctx.onError?.(err);
+    }
+  };
+  const safeKeyUp = (event: KeyboardEvent): void => {
+    try {
+      onKeyUp(event);
+    } catch (err) {
+      ctx.onError?.(err);
+    }
+  };
+
   const listenerOpts: AddEventListenerOptions | undefined = signal ? { signal } : undefined;
-  window.addEventListener("keydown", onKeyDown, listenerOpts);
-  window.addEventListener("keyup", onKeyUp, listenerOpts);
+  window.addEventListener("keydown", safeKeyDown, listenerOpts);
+  window.addEventListener("keyup", safeKeyUp, listenerOpts);
+  if (typeof ctx.container?.addEventListener === "function") {
+    ctx.container.addEventListener("pointerdown", markActive, listenerOpts);
+    ctx.container.addEventListener("focusin", markActive, listenerOpts);
+  }
+  if (typeof ctx.svg?.addEventListener === "function") {
+    ctx.svg.addEventListener("pointerdown", markActive, listenerOpts);
+    ctx.svg.addEventListener("focusin", markActive, listenerOpts);
+  }
 
   return () => {
-    window.removeEventListener("keydown", onKeyDown);
-    window.removeEventListener("keyup", onKeyUp);
+    window.removeEventListener("keydown", safeKeyDown);
+    window.removeEventListener("keyup", safeKeyUp);
+    if (typeof ctx.container?.removeEventListener === "function") {
+      ctx.container.removeEventListener("pointerdown", markActive);
+      ctx.container.removeEventListener("focusin", markActive);
+    }
+    if (typeof ctx.svg?.removeEventListener === "function") {
+      ctx.svg.removeEventListener("pointerdown", markActive);
+      ctx.svg.removeEventListener("focusin", markActive);
+    }
+    if (activeFocusedInstanceId === canvas.getInstanceId()) {
+      activeFocusedInstanceId = null;
+    }
   };
 }

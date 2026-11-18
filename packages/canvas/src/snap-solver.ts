@@ -1,6 +1,6 @@
 // Pure spatial snap solver and alignment guide calculations (R-002, R-005, R-008, R-010, ADR-0011).
-import type { BoundingBox, DeviceType, Point, ShapeId } from "@open-draw/contracts";
-import { type Document, subtreeOf } from "@open-draw/document";
+import type { BoundingBox, Point, ShapeId } from "@open-draw/contracts";
+import { type ChildIndex, type Document, buildChildIndex, subtreeOf } from "@open-draw/document";
 import type { HandleId } from "./handles";
 import { HANDLES } from "./handles";
 import { resizeBox } from "./geometry";
@@ -229,7 +229,7 @@ export interface PointerSnapContext {
   readonly zoom: number;
   readonly disabled?: boolean | undefined;
   readonly thresholdPx?: number | undefined;
-  readonly activeDeviceType?: DeviceType | undefined;
+  readonly childIndex?: ChildIndex | undefined;
 }
 
 export function resolvePointerSnap(ctx: PointerSnapContext): {
@@ -240,21 +240,15 @@ export function resolvePointerSnap(ctx: PointerSnapContext): {
     return { snappedWorld: ctx.rawWorld, guides: [] };
   }
 
+  const childIndex = ctx.childIndex ?? buildChildIndex(ctx.doc);
   const excludeIds = new Set<ShapeId>(ctx.movingShapeIds);
   for (const id of ctx.movingShapeIds) {
-    for (const s of subtreeOf(ctx.doc, id)) {
+    for (const s of subtreeOf(ctx.doc, id, childIndex)) {
       excludeIds.add(s.id);
     }
   }
 
-  const rawTargets = querySpatialIndexBox(ctx.spatialIndex, ctx.viewportBox);
-  const targets =
-    ctx.activeDeviceType !== undefined
-      ? rawTargets.filter((t) => {
-          const s = ctx.doc.shapes[t.id];
-          return !s?.meta.hiddenOn?.includes(ctx.activeDeviceType!);
-        })
-      : rawTargets;
+  const targets = querySpatialIndexBox(ctx.spatialIndex, ctx.viewportBox);
   const snapOpts: SnapOptions = {
     thresholdPx: ctx.thresholdPx,
     zoom: ctx.zoom,

@@ -35,7 +35,7 @@ describe("Macro Rendering Benchmarks (ADR-0008, ADR-0011)", () => {
   for (const { count, label, maxCullMs, maxHitMs } of scales) {
     it(`evaluates ${label} (${count} shapes) within strict latency budgets`, () => {
       const shapes = generateGridDocument(count);
-      const doc = createDocument(shapes);
+      const doc = createDocument(shapes, { maxShapeCount: count });
       const canvas = createCanvas();
 
       // 1. Spatial indexing & initial culling benchmark

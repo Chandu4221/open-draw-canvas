@@ -1,5 +1,11 @@
-import type { BoundingBox, Point, ShapeId } from "@open-draw/contracts";
-import { absoluteBoundingBox, type Command, type Document } from "@open-draw/document";
+import { type BoundingBox, CAPABILITIES, type Point, type ShapeId } from "@open-draw/contracts";
+import {
+  absoluteBoundingBox,
+  buildChildIndex,
+  type ChildIndex,
+  type Command,
+  type Document,
+} from "@open-draw/document";
 import type { CanvasController } from "./create-canvas";
 import { CANVAS_EVENTS } from "./events";
 import { GESTURE_KINDS, type GestureKind } from "./gestures";
@@ -55,6 +61,7 @@ export interface PointerBindingContext {
         },
       ) => boolean | void)
     | undefined;
+  readonly onError?: ((error: unknown) => void) | undefined;
 }
 
 export function attachPointerListeners(
@@ -81,6 +88,7 @@ export function attachPointerListeners(
   let hasPassedDragThreshold = false;
   let cachedRect: DOMRect | { left: number; top: number; width: number; height: number } | null =
     null;
+  let cachedChildIndex: ChildIndex | null = null;
   let touchTracker = createTouchTracker();
 
   function screenPoint(event: MouseEvent | PointerEvent | WheelEvent): Point {
@@ -98,6 +106,7 @@ export function attachPointerListeners(
     }
     cachedRect = svg.getBoundingClientRect();
     const doc = getDoc();
+    cachedChildIndex = buildChildIndex(doc);
     const tool = getTool();
     const screen = screenPoint(event);
     const world = canvas.screenToWorld(screen);
@@ -141,21 +150,27 @@ export function attachPointerListeners(
     let originalBox: BoundingBox | null = null;
     if (selectedIds.length === 1) {
       const shape = doc.shapes[selectedIds[0]!];
-      if (shape !== undefined && shape.kind !== "page") {
+      if (shape !== undefined && canvas.hasCapability(shape.kind, CAPABILITIES.resizable)) {
         originalBox = absoluteBoundingBox(doc, shape);
         handle = canvas.pickHandle(originalBox, screen);
       }
     } else if (selectedIds.length > 1) {
-      const boxes: BoundingBox[] = [];
-      for (const id of selectedIds) {
+      const allResizable = selectedIds.every((id) => {
         const s = doc.shapes[id];
-        if (s !== undefined && s.kind !== "page") {
-          boxes.push(absoluteBoundingBox(doc, s));
+        return s !== undefined && canvas.hasCapability(s.kind, CAPABILITIES.resizable);
+      });
+      if (allResizable) {
+        const boxes: BoundingBox[] = [];
+        for (const id of selectedIds) {
+          const s = doc.shapes[id];
+          if (s !== undefined) {
+            boxes.push(absoluteBoundingBox(doc, s));
+          }
         }
-      }
-      originalBox = unionBoxes(boxes);
-      if (originalBox !== null) {
-        handle = canvas.pickHandle(originalBox, screen);
+        originalBox = unionBoxes(boxes);
+        if (originalBox !== null) {
+          handle = canvas.pickHandle(originalBox, screen);
+        }
       }
     }
 
@@ -196,7 +211,7 @@ export function attachPointerListeners(
     }
 
     const state = canvas.getMachineState();
-    const kind: GestureKind =
+    let kind: GestureKind =
       state.stateId === STATES.panning
         ? GESTURE_KINDS.pan
         : state.stateId === STATES.drawingShape
@@ -211,9 +226,16 @@ export function attachPointerListeners(
 
     let shapeIds: readonly ShapeId[] = [];
     if (state.stateId === STATES.pointingShape && state.activeShapeId !== null) {
-      shapeIds = canvas.isSelected(state.activeShapeId)
+      const candidateIds = canvas.isSelected(state.activeShapeId)
         ? canvas.getSelectedIds()
         : [state.activeShapeId];
+      shapeIds = candidateIds.filter((id) => {
+        const s = doc.shapes[id];
+        return s !== undefined && canvas.hasCapability(s.kind, CAPABILITIES.movable);
+      });
+      if (shapeIds.length === 0) {
+        kind = GESTURE_KINDS.press;
+      }
     } else if (state.stateId === STATES.pointingHandle) {
       shapeIds = selectedIds;
     }
@@ -221,14 +243,14 @@ export function attachPointerListeners(
     if (originalBox === null && shapeIds.length > 0) {
       if (shapeIds.length === 1) {
         const s = doc.shapes[shapeIds[0]!];
-        if (s !== undefined && s.kind !== "page") {
+        if (s !== undefined) {
           originalBox = absoluteBoundingBox(doc, s);
         }
       } else {
         const boxes: BoundingBox[] = [];
         for (const id of shapeIds) {
           const s = doc.shapes[id];
-          if (s !== undefined && s.kind !== "page") {
+          if (s !== undefined) {
             boxes.push(absoluteBoundingBox(doc, s));
           }
         }
@@ -346,7 +368,7 @@ export function attachPointerListeners(
         viewportBox,
         zoom: canvas.getCamera().zoom,
         thresholdPx,
-        activeDeviceType: canvas.getActiveDeviceType(),
+        childIndex: cachedChildIndex ?? undefined,
       });
       effectiveWorld = snapRes.snappedWorld;
       snapGuides = snapRes.guides;
@@ -384,6 +406,7 @@ export function attachPointerListeners(
       setGesture(null);
       hasPassedDragThreshold = false;
       cachedRect = null;
+      cachedChildIndex = null;
       svg.style.cursor = resolveToolCursor(getTool(), getSpacePressed());
       render();
       return;
@@ -404,57 +427,64 @@ export function attachPointerListeners(
       worldPoint: commitWorld,
     });
 
-    if (hasPassedDragThreshold) {
-      if (before === STATES.draggingShape && gesture.shapeIds.length > 0) {
-        commitDragGesture(doc, gesture, commitWorld, execute, ctx.nestingMode);
-      } else if (before === STATES.resizingShape) {
-        commitResizeGesture(doc, canvas, gesture, commitWorld, execute);
-      } else if (before === STATES.drawingShape) {
-        commitDrawGesture(
-          doc,
-          canvas,
-          gesture,
-          commitWorld,
-          tool,
-          execute,
-          ctx.nestingMode,
-          ctx.nextShapeId,
-        );
-        setTool(TOOLS.select);
-      } else if (before === STATES.selecting || gesture.kind === GESTURE_KINDS.select) {
-        const marqueeBox = normalizeBox(gesture.startWorld, world);
-        if (marqueeBox.width > 2 || marqueeBox.height > 2) {
-          const picked = canvas.pickShapesInBox(doc, marqueeBox);
-          if (event.shiftKey) {
-            canvas.selectMany(Array.from(new Set([...canvas.getSelectedIds(), ...picked])));
-          } else {
-            canvas.selectMany(picked);
+    try {
+      if (hasPassedDragThreshold) {
+        if (before === STATES.draggingShape && gesture.shapeIds.length > 0) {
+          commitDragGesture(doc, gesture, commitWorld, execute, ctx.nestingMode, (kind) =>
+            canvas.hasCapability(kind, CAPABILITIES.container),
+          );
+        } else if (before === STATES.resizingShape) {
+          commitResizeGesture(doc, canvas, gesture, commitWorld, execute);
+        } else if (before === STATES.drawingShape) {
+          commitDrawGesture(
+            doc,
+            canvas,
+            gesture,
+            commitWorld,
+            tool,
+            execute,
+            ctx.nestingMode,
+            ctx.nextShapeId,
+          );
+          setTool(TOOLS.select);
+        } else if (before === STATES.selecting || gesture.kind === GESTURE_KINDS.select) {
+          const marqueeBox = normalizeBox(gesture.startWorld, world);
+          if (marqueeBox.width > 2 || marqueeBox.height > 2) {
+            const picked = canvas.pickShapesInBox(doc, marqueeBox);
+            if (event.shiftKey) {
+              canvas.selectMany(Array.from(new Set([...canvas.getSelectedIds(), ...picked])));
+            } else {
+              canvas.selectMany(picked);
+            }
+          } else if (!event.shiftKey) {
+            canvas.clearSelection();
           }
-        } else if (!event.shiftKey) {
+        }
+      } else {
+        if (before === STATES.drawingShape && tool === TOOLS.drawText) {
+          commitDrawGesture(
+            doc,
+            canvas,
+            gesture,
+            world,
+            tool,
+            execute,
+            ctx.nestingMode,
+            ctx.nextShapeId,
+          );
+          setTool(TOOLS.select);
+        } else if (before === STATES.idle && gesture.kind === GESTURE_KINDS.press) {
           canvas.clearSelection();
         }
       }
-    } else {
-      if (before === STATES.drawingShape && tool === TOOLS.drawText) {
-        commitDrawGesture(
-          doc,
-          canvas,
-          gesture,
-          world,
-          tool,
-          execute,
-          ctx.nestingMode,
-          ctx.nextShapeId,
-        );
-        setTool(TOOLS.select);
-      } else if (before === STATES.idle && gesture.kind === GESTURE_KINDS.press) {
-        canvas.clearSelection();
-      }
+    } catch (err) {
+      ctx.onError?.(err);
     }
 
     setGesture(null);
     hasPassedDragThreshold = false;
     cachedRect = null;
+    cachedChildIndex = null;
     svg.style.cursor = resolveToolCursor(tool, getSpacePressed());
     render();
   }
@@ -476,6 +506,7 @@ export function attachPointerListeners(
         setGesture(null);
         hasPassedDragThreshold = false;
         cachedRect = null;
+        cachedChildIndex = null;
         svg.style.cursor = resolveToolCursor(getTool(), getSpacePressed());
         ctx.renderDocument?.(true);
         render();
@@ -493,6 +524,7 @@ export function attachPointerListeners(
       setGesture(null);
       hasPassedDragThreshold = false;
       cachedRect = null;
+      cachedChildIndex = null;
       svg.style.cursor = resolveToolCursor(getTool(), getSpacePressed());
       ctx.renderDocument?.(true);
       render();
@@ -504,6 +536,7 @@ export function attachPointerListeners(
       setGesture(null);
       hasPassedDragThreshold = false;
       cachedRect = null;
+      cachedChildIndex = null;
       svg.style.cursor = resolveToolCursor(getTool(), getSpacePressed());
       render();
     }
@@ -531,13 +564,49 @@ export function attachPointerListeners(
     }
   }
 
+  const safePointerDown = (event: PointerEvent): void => {
+    try {
+      onPointerDown(event);
+    } catch (err) {
+      ctx.onError?.(err);
+    }
+  };
+  const safePointerMove = (event: PointerEvent): void => {
+    try {
+      onPointerMove(event);
+    } catch (err) {
+      ctx.onError?.(err);
+    }
+  };
+  const safePointerUp = (event: PointerEvent): void => {
+    try {
+      onPointerUp(event);
+    } catch (err) {
+      ctx.onError?.(err);
+    }
+  };
+  const safePointerCancel = (event: PointerEvent): void => {
+    try {
+      onPointerCancel(event);
+    } catch (err) {
+      ctx.onError?.(err);
+    }
+  };
+  const safeDoubleClick = (event: MouseEvent): void => {
+    try {
+      onDoubleClick(event);
+    } catch (err) {
+      ctx.onError?.(err);
+    }
+  };
+
   const listenerOpts: AddEventListenerOptions | undefined = signal ? { signal } : undefined;
-  svg.addEventListener("pointerdown", onPointerDown, listenerOpts);
-  svg.addEventListener("pointermove", onPointerMove, listenerOpts);
-  svg.addEventListener("pointerup", onPointerUp, listenerOpts);
-  svg.addEventListener("pointercancel", onPointerCancel, listenerOpts);
-  svg.addEventListener("lostpointercapture", onPointerCancel, listenerOpts);
-  svg.addEventListener("dblclick", onDoubleClick, listenerOpts);
+  svg.addEventListener("pointerdown", safePointerDown, listenerOpts);
+  svg.addEventListener("pointermove", safePointerMove, listenerOpts);
+  svg.addEventListener("pointerup", safePointerUp, listenerOpts);
+  svg.addEventListener("pointercancel", safePointerCancel, listenerOpts);
+  svg.addEventListener("lostpointercapture", safePointerCancel, listenerOpts);
+  svg.addEventListener("dblclick", safeDoubleClick, listenerOpts);
   if (typeof window !== "undefined") {
     window.addEventListener("blur", onBlur, listenerOpts);
   }
@@ -546,12 +615,12 @@ export function attachPointerListeners(
   }
 
   return () => {
-    svg.removeEventListener("pointerdown", onPointerDown);
-    svg.removeEventListener("pointermove", onPointerMove);
-    svg.removeEventListener("pointerup", onPointerUp);
-    svg.removeEventListener("pointercancel", onPointerCancel);
-    svg.removeEventListener("lostpointercapture", onPointerCancel);
-    svg.removeEventListener("dblclick", onDoubleClick);
+    svg.removeEventListener("pointerdown", safePointerDown);
+    svg.removeEventListener("pointermove", safePointerMove);
+    svg.removeEventListener("pointerup", safePointerUp);
+    svg.removeEventListener("pointercancel", safePointerCancel);
+    svg.removeEventListener("lostpointercapture", safePointerCancel);
+    svg.removeEventListener("dblclick", safeDoubleClick);
     if (typeof window !== "undefined") {
       window.removeEventListener("blur", onBlur);
     }

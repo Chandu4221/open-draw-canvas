@@ -16,29 +16,7 @@ export type FillStyle = (typeof FILL_STYLES)[keyof typeof FILL_STYLES];
 export const FILL_STYLE_VALUES: ReadonlySet<string> = new Set(Object.values(FILL_STYLES));
 
 /**
- * Closed registry of style profiles (R-021).
- */
-export const STYLE_PROFILES = {
-  minimal: "minimal",
-  crayon: "crayon",
-} as const;
-
-export type StyleId = keyof typeof STYLE_PROFILES;
-
-export const STYLE_PROFILE_BY_VALUE: Readonly<Record<string, StyleId>> = Object.fromEntries(
-  (Object.keys(STYLE_PROFILES) as StyleId[]).map((style) => [STYLE_PROFILES[style], style]),
-);
-
-/**
- * Style profile contract.
- */
-export interface StyleProfile {
-  readonly id: StyleId;
-  readonly label: string;
-}
-
-/**
- * Context provided to style-specific renderers.
+ * Context provided to shape renderers.
  */
 export interface StyleRenderContext {
   readonly seed?: number;
@@ -46,7 +24,7 @@ export interface StyleRenderContext {
 }
 
 /**
- * Pure function rendering a shape in a specific style (R-008, R-021).
+ * Pure function rendering a shape (R-008, R-021).
  */
 export type StyleShapeRenderer<TShape = unknown, TBox = unknown> = (
   shape: TShape,
@@ -55,16 +33,8 @@ export type StyleShapeRenderer<TShape = unknown, TBox = unknown> = (
 ) => string;
 
 /**
- * Registry of shape renderers for a specific style profile.
+ * Registry of shape renderers.
  */
 export type StyleRendererMap<TShape = unknown, TBox = unknown> = Readonly<
   Record<string, StyleShapeRenderer<TShape, TBox>>
 >;
-
-/**
- * Style render extension definition.
- */
-export interface StyleRenderExtension<TShape = unknown, TBox = unknown> {
-  readonly styleId: StyleId;
-  readonly renderers: StyleRendererMap<TShape, TBox>;
-}

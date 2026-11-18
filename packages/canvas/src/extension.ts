@@ -120,7 +120,6 @@ export function createDefaultCustomShape(
   const init: ShapeInit = {
     parentId: options?.parentId ?? ROOT_ID,
     meta: {
-      order: {},
       ...(options?.meta ?? {}),
     },
     ...(options?.label !== undefined ? { label: options.label } : {}),

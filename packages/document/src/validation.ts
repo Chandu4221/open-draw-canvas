@@ -5,28 +5,23 @@
 import type { BoundingBox, CustomShapeKind, Point, ShapeId, ShapeKind } from "@open-draw/contracts";
 import {
   MAX_COORDINATE_BOUND,
+  MAX_DOCUMENT_SHAPE_COUNT,
+  MAX_PEN_PATH_POINTS,
   ROOT_ID,
   SHAPE_KINDS,
   SHAPE_KIND_VALUES,
-  isRootId,
   isValidCustomShapeKind,
   parseShapeId,
 } from "@open-draw/contracts";
 import type { Document } from "./document";
 import { SCHEMA_VERSION, createDocument } from "./document";
 import { DocumentError } from "./errors";
-import {
-  BASE_SHAPE_KEY_SET,
-  SECTION_DIRECTIONS,
-  type CustomShape,
-  type SectionDirection,
-  type Shape,
-} from "./shape";
+import { BASE_SHAPE_KEY_SET, type CustomShape, type Shape } from "./shape";
 import { parseMeta } from "./meta-validation";
 import { validateDocumentDepth } from "./depth-validation";
 
 export { validateDocumentDepth } from "./depth-validation";
-export { parseMeta, parseDeviceType } from "./meta-validation";
+export { parseMeta } from "./meta-validation";
 export { parseShape };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -64,16 +59,6 @@ function parseBoundingBox(value: unknown): BoundingBox {
     );
   }
   return { x: value.x, y: value.y, width: value.width, height: value.height };
-}
-
-function parseSectionDirection(value: unknown): SectionDirection {
-  if (
-    typeof value !== "string" ||
-    (value !== SECTION_DIRECTIONS.row && value !== SECTION_DIRECTIONS.column)
-  ) {
-    throw new DocumentError("invalidShape", `invalid section direction: ${JSON.stringify(value)}`);
-  }
-  return value;
 }
 
 function parseKind(value: unknown): ShapeKind {
@@ -149,8 +134,7 @@ function parseShape(value: unknown): Shape {
   if (value.fillStyle !== undefined) {
     fillStyle = parseFillStyle(value.fillStyle);
   }
-  const isRootShape = isRootId(parentId);
-  const meta = parseMeta(value.meta, isRootShape);
+  const meta = parseMeta(value.meta);
   const base = {
     id,
     kind,
@@ -167,9 +151,6 @@ function parseShape(value: unknown): Shape {
 
   // Validated cast at the boundary: kind membership was checked above and the
   // kind-specific fields are checked right here.
-  if (kind === SHAPE_KINDS.section) {
-    return { ...base, kind, direction: parseSectionDirection(value.direction) } as Shape;
-  }
   if (kind === SHAPE_KINDS.line) {
     const start = parsePoint(value.start, "line start");
     const end = parsePoint(value.end, "line end");
@@ -179,6 +160,12 @@ function parseShape(value: unknown): Shape {
     if (!Array.isArray(value.points)) {
       throw new DocumentError("invalidShape", "pen-path points must be an array");
     }
+    if (value.points.length > MAX_PEN_PATH_POINTS) {
+      throw new DocumentError(
+        "invalidShape",
+        `pen-path points count (${value.points.length}) exceeds maximum allowed points (${MAX_PEN_PATH_POINTS})`,
+      );
+    }
     const points = value.points.map((pt, i) => parsePoint(pt, `pen-path point[${i}]`));
     return { ...base, kind, points } as Shape;
   }
@@ -186,10 +173,18 @@ function parseShape(value: unknown): Shape {
     // Custom shape: preserve any extra non-base properties
     const extra: Record<string, unknown> = {};
     if (typeof value.customData === "object" && value.customData !== null) {
-      Object.assign(extra, value.customData);
+      for (const [k, v] of Object.entries(value.customData)) {
+        if (k === "__proto__" || k === "constructor" || k === "prototype") {
+          throw new DocumentError("invalidDocument", `forbidden customData key: ${k}`);
+        }
+        extra[k] = v;
+      }
     }
     for (const [k, v] of Object.entries(value)) {
       if (!BASE_SHAPE_KEY_SET.has(k) && k !== "customData") {
+        if (k === "__proto__" || k === "constructor" || k === "prototype") {
+          throw new DocumentError("invalidDocument", `forbidden property key: ${k}`);
+        }
         extra[k] = v;
       }
     }
@@ -217,8 +212,16 @@ export function parseDocument(input: unknown): Document {
   // Pre-validate document depth before expensive per-shape parsing (Ruling V1, R-006)
   validateDocumentDepth(input.shapes);
 
+  const shapeEntries = Object.entries(input.shapes);
+  if (shapeEntries.length > MAX_DOCUMENT_SHAPE_COUNT) {
+    throw new DocumentError(
+      "documentShapeCountExceeded",
+      `shape count (${shapeEntries.length}) exceeds maximum allowed shapes (${MAX_DOCUMENT_SHAPE_COUNT})`,
+    );
+  }
+
   const shapes: Shape[] = [];
-  for (const [key, entry] of Object.entries(input.shapes)) {
+  for (const [key, entry] of shapeEntries) {
     const shape = parseShape(entry);
     if (shape.id !== key) {
       throw new DocumentError("invalidShape", `record key must match shape id: ${key}`);

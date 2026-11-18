@@ -4,7 +4,6 @@ import {
   isRootId,
   type BoundingBox,
   type CustomShapeKind,
-  type DeviceType,
   type PluginId,
   type Point,
   type ShapeId,
@@ -19,12 +18,14 @@ import {
   parseDocument,
   recordHistory,
   redo,
+  REORDER_OPERATIONS,
   serializeDocument,
   undo,
   type Command,
   type Document,
   type HistoryState,
   type Shape,
+  type UndoRedoResult,
 } from "@open-draw/document";
 import {
   documentToSvg,
@@ -36,6 +37,7 @@ import { cameraToViewportBox, DEFAULT_CAMERA } from "./camera";
 import { createCanvas } from "./create-canvas";
 import { querySpatialIndexBox } from "./spatial/spatial-index";
 import { CONTROLLER_EVENTS } from "./events";
+import { CanvasError } from "./errors";
 import { TOOLS, type ToolId } from "./tools";
 import { type ActiveGesture, createShapeIdGenerator } from "./editor-gestures";
 import { computeEditorOverlays } from "./editor-overlays";
@@ -63,26 +65,27 @@ function isPropertyMutationCommand(cmd: Command): boolean {
     cmd.type === COMMANDS.setShapeStyle ||
     cmd.type === COMMANDS.setShapeLabel ||
     cmd.type === COMMANDS.setShapeContent ||
-    cmd.type === COMMANDS.setShapeHiddenOn ||
     cmd.type === COMMANDS.setShapePluginData
   );
 }
 
-function isGeometryMutationCommand(cmd: Command): boolean {
+function isStructuralMutationCommand(cmd: Command): boolean {
   return (
     cmd.type === COMMANDS.createShape ||
     cmd.type === COMMANDS.deleteShape ||
     cmd.type === COMMANDS.reparentShape ||
-    cmd.type === COMMANDS.moveShapes ||
-    cmd.type === COMMANDS.setShapeBoundingBox ||
-    cmd.type === COMMANDS.duplicateShapes
+    cmd.type === COMMANDS.duplicateShapes ||
+    cmd.type === COMMANDS.reorderShapes
   );
 }
 
 export function createEditor(container: HTMLElement, options: EditorOptions = {}): Editor {
-  const canvas = createCanvas(options.canvasOptions);
+  const canvas = createCanvas({
+    ...options.canvasOptions,
+    ...(options.instanceId !== undefined ? { instanceId: options.instanceId } : {}),
+  });
   let doc = options.document ?? createDocument([]);
-  const idSequence = createShapeIdGenerator(doc);
+  const idSequence = createShapeIdGenerator(doc, canvas.getInstanceId());
   let history: HistoryState = EMPTY_HISTORY;
   let activeTool: ToolId = options.tool ?? TOOLS.select;
   let gesture: ActiveGesture | null = null;
@@ -91,6 +94,11 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
   let isDestroyed = false;
   const abortController = typeof AbortController !== "undefined" ? new AbortController() : null;
   const abortSignal = abortController?.signal;
+
+  const defaultOnError = (err: unknown): void => {
+    console.error("[OpenDraw]", err);
+  };
+  const handleError = options.onError ?? defaultOnError;
 
   const customShapeRegistry: Record<string, CustomShapeExtension> = Object.create(null);
   const activeCustomRenderers: Record<string, ShapeSvgRenderer> = {
@@ -223,9 +231,8 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     }
 
     const renderOpts = {
-      activeDeviceType: canvas.getActiveDeviceType(),
-      activeDeviceTypes: canvas.getActiveDeviceTypes(),
       customRenderers: activeCustomRenderers,
+      instanceId: options.instanceId ?? canvas.getInstanceId(),
       visibleShapeIds,
       wrapShapeId: true,
       onFallback: (evt: { shapeId: ShapeId; kind: string }) => {
@@ -280,13 +287,11 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
   function renderOverlays(): void {
     if (isDestroyed) return;
     const cam = canvas.getCamera();
-    const activeDeviceType = canvas.getActiveDeviceType();
     const customOverlays = options.renderCustomOverlays?.({
       doc,
       selectedIds: canvas.getSelectedIds(),
       camera: cam,
       zoom: cam.zoom,
-      activeDeviceType,
       canvas,
     });
     const overlays = computeEditorOverlays({
@@ -313,30 +318,39 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     if (isDestroyed) return;
     const cmds = Array.isArray(commands) ? commands : [commands];
     if (cmds.length === 0) return;
-    const result = applyTransaction(doc, createTransaction(cmds));
-    if (result.document === doc && result.inverse.length === 0) {
-      return;
-    }
-    const hasGeometryChange = cmds.some(isGeometryMutationCommand);
-    if (hasGeometryChange) {
-      canvas.invalidateSpatialIndex();
-    }
-    const isAllPropertyMutations = cmds.every(isPropertyMutationCommand);
-    const affectedShapeIds = isAllPropertyMutations
-      ? new Set((cmds as Array<{ id: ShapeId }>).map((c) => c.id))
-      : undefined;
-
-    canvas.batch(() => {
-      doc = result.document;
-      reconcileSelection();
-      if (opts?.record !== false && result.inverse.length > 0) {
-        history = recordHistory(history, result.inverse);
-        canvas.emit(CONTROLLER_EVENTS.historyChanged);
+    try {
+      const result = applyTransaction(doc, createTransaction(cmds));
+      if (result.document === doc && result.inverse.length === 0) {
+        return;
       }
-      canvas.emit(CONTROLLER_EVENTS.documentChanged);
-    });
-    renderDocument(false, affectedShapeIds);
-    renderOverlays();
+      const hasStructuralChange = cmds.some(isStructuralMutationCommand);
+      if (hasStructuralChange) {
+        canvas.invalidateSpatialIndex();
+      }
+      const isAllPropertyMutations = cmds.every(isPropertyMutationCommand);
+      const affectedShapeIds = isAllPropertyMutations
+        ? new Set((cmds as Array<{ id: ShapeId }>).map((c) => c.id))
+        : undefined;
+
+      canvas.batch(() => {
+        doc = result.document;
+        reconcileSelection();
+        if (opts?.record !== false && result.inverse.length > 0) {
+          history = recordHistory(history, result.inverse);
+          canvas.emit(CONTROLLER_EVENTS.historyChanged);
+        }
+        canvas.emit(CONTROLLER_EVENTS.documentChanged);
+      });
+      renderDocument(false, affectedShapeIds);
+      renderOverlays();
+    } catch (err) {
+      if (options.onError) {
+        options.onError(err);
+      } else {
+        handleError(err);
+        throw err;
+      }
+    }
   }
 
   function onWheel(event: WheelEvent): void {
@@ -392,6 +406,7 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
         options.onDoubleClick?.(hitId);
       },
       snapConfig: options.snapping,
+      onError: handleError,
     },
     abortSignal,
   );
@@ -428,6 +443,7 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
       execute: (cmds) => execute(cmds),
       render: () => renderOverlays(),
       nextShapeId: idSequence.nextShapeId,
+      onError: handleError,
     },
     abortSignal,
   );
@@ -476,7 +492,7 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     renderOverlays();
   }
 
-  function applyHistory(result: { document: Document; history: HistoryState } | null): boolean {
+  function applyHistory(result: UndoRedoResult | null): boolean {
     if (result === null) return false;
     canvas.invalidateSpatialIndex();
     doc = result.document;
@@ -486,6 +502,9 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     canvas.emit(CONTROLLER_EVENTS.documentChanged);
     renderDocument();
     renderOverlays();
+    if (result.error !== undefined) {
+      handleError(result.error);
+    }
     return true;
   }
 
@@ -525,9 +544,8 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     },
     toSvg: () =>
       exportDocumentToSvg(doc, {
-        activeDeviceType: canvas.getActiveDeviceType(),
-        activeDeviceTypes: canvas.getActiveDeviceTypes(),
         customRenderers: activeCustomRenderers,
+        instanceId: options.instanceId ?? canvas.getInstanceId(),
       }),
     setTextContent: (id: ShapeId, content: string | null) => {
       execute([{ type: COMMANDS.setShapeContent, id, content }]);
@@ -535,11 +553,56 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     setShapeStyle: (id: ShapeId, style) => {
       execute([{ type: COMMANDS.setShapeStyle, id, ...style }]);
     },
-    setShapeOrder: (id: ShapeId, deviceType: DeviceType, order: number | null) => {
-      execute([{ type: COMMANDS.setShapeOrder, id, deviceType, order }]);
-    },
     setShapePluginData: (id: ShapeId, pluginId: PluginId, data: unknown | null) => {
       execute([{ type: COMMANDS.setShapePluginData, id, pluginId, data }]);
+    },
+    bringToFront: (ids?: readonly ShapeId[]) => {
+      const targetIds = ids ?? canvas.getSelectedIds();
+      if (targetIds.length > 0) {
+        execute([
+          {
+            type: COMMANDS.reorderShapes,
+            ids: targetIds,
+            operation: REORDER_OPERATIONS.bringToFront,
+          },
+        ]);
+      }
+    },
+    sendToBack: (ids?: readonly ShapeId[]) => {
+      const targetIds = ids ?? canvas.getSelectedIds();
+      if (targetIds.length > 0) {
+        execute([
+          {
+            type: COMMANDS.reorderShapes,
+            ids: targetIds,
+            operation: REORDER_OPERATIONS.sendToBack,
+          },
+        ]);
+      }
+    },
+    bringForward: (ids?: readonly ShapeId[]) => {
+      const targetIds = ids ?? canvas.getSelectedIds();
+      if (targetIds.length > 0) {
+        execute([
+          {
+            type: COMMANDS.reorderShapes,
+            ids: targetIds,
+            operation: REORDER_OPERATIONS.bringForward,
+          },
+        ]);
+      }
+    },
+    sendBackward: (ids?: readonly ShapeId[]) => {
+      const targetIds = ids ?? canvas.getSelectedIds();
+      if (targetIds.length > 0) {
+        execute([
+          {
+            type: COMMANDS.reorderShapes,
+            ids: targetIds,
+            operation: REORDER_OPERATIONS.sendBackward,
+          },
+        ]);
+      }
     },
     execute,
     undo: () => applyHistory(undo(doc, history)),
@@ -556,15 +619,10 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
 
     getSelection: () => canvas.getSelectedIds(),
     select: (id) => {
-      if (doc.shapes[id] !== undefined) {
-        canvas.select(id);
-      } else {
-        canvas.clearSelection();
-      }
+      canvas.select(id, doc);
     },
     selectMany: (ids) => {
-      const surviving = ids.filter((id) => doc.shapes[id] !== undefined);
-      canvas.selectMany(surviving);
+      canvas.selectMany(ids, doc);
     },
     reconcileSelection: () => reconcileSelection(),
     clearSelection: () => canvas.clearSelection(),
@@ -589,21 +647,15 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
       opts?: CustomShapeCreateOptions,
     ): Shape => {
       const ext = customShapeRegistry[kind];
+      if (!ext) {
+        throw new CanvasError(
+          "unknownShapeKind",
+          `cannot insert unregistered custom shape kind: ${kind}`,
+        );
+      }
       const shapeId = idSequence.nextShapeId(doc);
-      const shape = ext
-        ? createDefaultCustomShape(ext, shapeId, box, opts)
-        : createDefaultCustomShape(
-            {
-              kind,
-              label: kind,
-              capabilities: [],
-              render: () => "",
-            },
-            shapeId,
-            box,
-            opts,
-          );
-      if (ext?.validate) {
+      const shape = createDefaultCustomShape(ext, shapeId, box, opts);
+      if (ext.validate) {
         ext.validate(shape);
       }
       execute([{ type: COMMANDS.createShape, shape }]);

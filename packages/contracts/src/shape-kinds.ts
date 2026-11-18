@@ -6,16 +6,15 @@ import type { CapabilityId } from "./capabilities";
 // so display names never drift from the kinds they label.
 //
 // Hybrid registry model:
-// - Built-in shape kinds stay closed: page, section, rect, ellipse, line, pen-path, text.
+// - Built-in shape kinds stay closed: rect, ellipse, line, pen-path, text, group.
 // - Custom shape kinds are pattern-open: "<scope>:<name>" kebab-case branded strings.
 export const SHAPE_KINDS = {
-  page: "page",
-  section: "section",
   rect: "rect",
   ellipse: "ellipse",
   line: "line",
   penPath: "pen-path",
   text: "text",
+  group: "group",
 } as const;
 
 export type BuiltinShapeKind = (typeof SHAPE_KINDS)[keyof typeof SHAPE_KINDS];
@@ -25,13 +24,12 @@ export type CustomShapeKind = string & { readonly __brand: "CustomShapeKind" };
 export type ShapeKind = BuiltinShapeKind | CustomShapeKind;
 
 export const SHAPE_KIND_LABELS: Readonly<Record<BuiltinShapeKind, string>> = {
-  [SHAPE_KINDS.page]: "Canvas Board",
-  [SHAPE_KINDS.section]: "Section",
   [SHAPE_KINDS.rect]: "Rectangle",
   [SHAPE_KINDS.ellipse]: "Ellipse",
   [SHAPE_KINDS.line]: "Line",
   [SHAPE_KINDS.penPath]: "Pen Path",
   [SHAPE_KINDS.text]: "Text",
+  [SHAPE_KINDS.group]: "Group",
 };
 
 export const SHAPE_KIND_VALUES: ReadonlySet<string> = new Set(Object.values(SHAPE_KINDS));

@@ -9,6 +9,7 @@ import {
   createDocument,
   createEditor,
   createRect,
+  escapeXml,
   parseDocument,
   parseShapeId,
   ROOT_ID,
@@ -113,10 +114,14 @@ describe("Downstream Package Packaging & Surface (ADR-0008, R-002, R-004)", () =
     expect(packageJson.publishConfig.types).toBe("./dist/index.d.ts");
     expect(packageJson.publishConfig.exports).toEqual({
       ".": {
-        types: "./dist/index.d.ts",
-        import: "./dist/index.js",
-        require: "./dist/index.cjs",
-        default: "./dist/index.js",
+        import: {
+          types: "./dist/index.d.ts",
+          default: "./dist/index.js",
+        },
+        require: {
+          types: "./dist/index.d.cts",
+          default: "./dist/index.cjs",
+        },
       },
     });
   });
@@ -193,6 +198,8 @@ describe("Downstream Package Packaging & Surface (ADR-0008, R-002, R-004)", () =
       const svg = editor.toSvg();
       expect(svg).toContain("<svg");
       expect(svg).toContain("<rect");
+
+      expect(escapeXml("<test>&\"'")).toBe("&lt;test&gt;&amp;&quot;&apos;");
 
       editor.destroy();
     } finally {

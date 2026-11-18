@@ -13,6 +13,10 @@ import { SELECT_TOOL_PEN_PATH } from "./select-tool-pen-path";
 import { SELECT_TOOL_RECT } from "./select-tool-rect";
 import { SELECT_TOOL_TEXT } from "./select-tool-text";
 import { UNDO } from "./undo";
+import { BRING_TO_FRONT } from "./bring-to-front";
+import { BRING_FORWARD } from "./bring-forward";
+import { SEND_BACKWARD } from "./send-backward";
+import { SEND_TO_BACK } from "./send-to-back";
 
 export const ACTIONS = {
   cancel: CANCEL,
@@ -28,6 +32,10 @@ export const ACTIONS = {
   selectToolLine: SELECT_TOOL_LINE,
   selectToolPenPath: SELECT_TOOL_PEN_PATH,
   selectToolText: SELECT_TOOL_TEXT,
+  bringToFront: BRING_TO_FRONT,
+  bringForward: BRING_FORWARD,
+  sendBackward: SEND_BACKWARD,
+  sendToBack: SEND_TO_BACK,
 } as const;
 
 export type ActionId = (typeof ACTIONS)[keyof typeof ACTIONS];

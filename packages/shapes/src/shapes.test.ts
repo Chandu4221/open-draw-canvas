@@ -5,7 +5,9 @@ import {
   deriveLineBoundingBox,
   derivePenPathBoundingBox,
   ELLIPSE_CAPABILITIES,
+  GROUP_CAPABILITIES,
   hitTestEllipse,
+  hitTestGroup,
   hitTestLine,
   hitTestPenPath,
   hitTestRect,
@@ -149,6 +151,7 @@ describe("pen-path shape module", () => {
     expect(BUILTIN_SHAPE_CAPABILITIES.rect).toBe(RECT_CAPABILITIES);
     expect(BUILTIN_SHAPE_CAPABILITIES["pen-path"]).toBe(PEN_PATH_CAPABILITIES);
     expect(BUILTIN_SHAPE_CAPABILITIES.text).toBe(TEXT_CAPABILITIES);
+    expect(BUILTIN_SHAPE_CAPABILITIES.group).toBe(GROUP_CAPABILITIES);
   });
 });
 
@@ -164,5 +167,20 @@ describe("text shape module", () => {
     expect(hitTestText(box, { x: 60, y: 110 })).toBe(true);
     expect(hitTestText(box, { x: 49, y: 110 })).toBe(false);
     expect(hitTestText(box, { x: 60, y: 133 })).toBe(false);
+  });
+});
+
+describe("group shape module", () => {
+  it("declares container, resizable, and movable capabilities", () => {
+    expect(GROUP_CAPABILITIES).toContain(CAPABILITIES.container);
+    expect(GROUP_CAPABILITIES).toContain(CAPABILITIES.resizable);
+    expect(GROUP_CAPABILITIES).toContain(CAPABILITIES.movable);
+  });
+
+  it("hit-tests points inside and outside group bounding box", () => {
+    const box = { x: 10, y: 20, width: 200, height: 150 };
+    expect(hitTestGroup(box, { x: 50, y: 60 })).toBe(true);
+    expect(hitTestGroup(box, { x: 5, y: 60 })).toBe(false);
+    expect(hitTestGroup(box, { x: 50, y: 200 })).toBe(false);
   });
 });

@@ -1,35 +1,22 @@
 // Mutates a shape record in-place for a single command and returns inverse commands.
 // Used by applyTransaction to batch N commands in O(N) without intermediate Document copying (R-018, ADR-0002 D8).
-import type { DeviceType, PluginId, ShapeId } from "@open-draw/contracts";
-import { isRootId, parsePluginId, SHAPE_KINDS } from "@open-draw/contracts";
+import type { BoundingBox, PluginId, ShapeId } from "@open-draw/contracts";
+import { MAX_COORDINATE_BOUND, parsePluginId, SHAPE_KINDS } from "@open-draw/contracts";
 import { COMMANDS } from "./commands/registry";
 import type { Command } from "./commands";
 import type { CreateShape } from "./commands/create-shape";
 import type { ShapeScaleHook } from "./commands/set-shape-bounding-box";
 import { deriveDeterministicId } from "./commands/duplicate-shapes";
+import { applyReorderShapesToMap } from "./commands/reorder-shapes";
+import { applySetShapeStyleToMap } from "./commands/set-shape-style";
 import type { Document } from "./document";
 import { SCHEMA_VERSION } from "./document";
 import { DocumentError } from "./errors";
 import { pruneSelectedDescendants } from "./reparent";
-import { isCustomShape, type Shape } from "./shape";
+import { isJsonSerializable } from "./meta-validation";
+import { isCustomShape, type LineShape, type PenPathShape, type Shape } from "./shape";
 import { subtreeOf } from "./tree";
 import { parseShape } from "./validation";
-import { parseColor, parseFillStyle, parseStrokeWidth } from "./style-validation";
-
-function areHiddenOnEqual(
-  a: readonly DeviceType[] | undefined | null,
-  b: readonly DeviceType[] | null,
-): boolean {
-  const listA = a === undefined || a === null || a.length === 0 ? null : a;
-  const listB = b === null || b.length === 0 ? null : b;
-  if (listA === listB) return true;
-  if (listA === null || listB === null) return false;
-  if (listA.length !== listB.length) return false;
-  for (let i = 0; i < listA.length; i += 1) {
-    if (listA[i] !== listB[i]) return false;
-  }
-  return true;
-}
 
 export function applyCommandToMap(
   shapes: Record<ShapeId, Shape>,
@@ -86,16 +73,22 @@ export function applyCommandToMap(
       const previousParentId = shape.parentId;
       const previousBoundingBox = shape.boundingBox;
       const targetParentId = command.parentId ?? command.parent!;
+      const clampedBox = {
+        x: Math.max(-MAX_COORDINATE_BOUND, Math.min(MAX_COORDINATE_BOUND, command.boundingBox.x)),
+        y: Math.max(-MAX_COORDINATE_BOUND, Math.min(MAX_COORDINATE_BOUND, command.boundingBox.y)),
+        width: Math.min(MAX_COORDINATE_BOUND, Math.max(1, command.boundingBox.width)),
+        height: Math.min(MAX_COORDINATE_BOUND, Math.max(1, command.boundingBox.height)),
+      };
       if (
         previousParentId === targetParentId &&
-        previousBoundingBox.x === command.boundingBox.x &&
-        previousBoundingBox.y === command.boundingBox.y &&
-        previousBoundingBox.width === command.boundingBox.width &&
-        previousBoundingBox.height === command.boundingBox.height
+        previousBoundingBox.x === clampedBox.x &&
+        previousBoundingBox.y === clampedBox.y &&
+        previousBoundingBox.width === clampedBox.width &&
+        previousBoundingBox.height === clampedBox.height
       ) {
         return [];
       }
-      shapes[command.id] = { ...shape, parentId: targetParentId, boundingBox: command.boundingBox };
+      shapes[command.id] = { ...shape, parentId: targetParentId, boundingBox: clampedBox };
       return [
         {
           type: COMMANDS.reparentShape,
@@ -107,6 +100,9 @@ export function applyCommandToMap(
     }
 
     case COMMANDS.moveShapes: {
+      if (!Number.isFinite(command.dx) || !Number.isFinite(command.dy)) {
+        throw new DocumentError("invalidCommand", "dx and dy must be finite numbers");
+      }
       for (const id of command.ids) {
         if (shapes[id] === undefined) {
           throw new DocumentError("shapeNotFound", `no shape with id: ${id}`);
@@ -115,18 +111,47 @@ export function applyCommandToMap(
       if (command.dx === 0 && command.dy === 0) {
         return [];
       }
+      let allExactDeltasMatch = true;
+      const originalBoxes = new Map<ShapeId, BoundingBox>();
       for (const id of command.ids) {
         const shape = shapes[id]!;
+        originalBoxes.set(id, shape.boundingBox);
+        const newX = Math.max(
+          -MAX_COORDINATE_BOUND,
+          Math.min(MAX_COORDINATE_BOUND, shape.boundingBox.x + command.dx),
+        );
+        const newY = Math.max(
+          -MAX_COORDINATE_BOUND,
+          Math.min(MAX_COORDINATE_BOUND, shape.boundingBox.y + command.dy),
+        );
+        if (
+          newX - shape.boundingBox.x !== command.dx ||
+          newY - shape.boundingBox.y !== command.dy
+        ) {
+          allExactDeltasMatch = false;
+        }
         shapes[id] = {
           ...shape,
           boundingBox: {
             ...shape.boundingBox,
-            x: shape.boundingBox.x + command.dx,
-            y: shape.boundingBox.y + command.dy,
+            x: newX,
+            y: newY,
           },
         };
       }
-      return [{ type: COMMANDS.moveShapes, ids: command.ids, dx: -command.dx, dy: -command.dy }];
+      if (allExactDeltasMatch) {
+        return [{ type: COMMANDS.moveShapes, ids: command.ids, dx: -command.dx, dy: -command.dy }];
+      }
+      return command.ids.map((id) => {
+        const orig = originalBoxes.get(id)!;
+        const moved = shapes[id]!;
+        return {
+          type: COMMANDS.moveShapes,
+          ids: [id],
+          dx: -(moved.boundingBox.x - orig.x),
+          dy: -(moved.boundingBox.y - orig.y),
+        };
+      });
     }
 
     case COMMANDS.setShapeBoundingBox: {
@@ -148,214 +173,98 @@ export function applyCommandToMap(
         );
       }
       const previousBox = shape.boundingBox;
+      const targetBox: BoundingBox = {
+        x: Math.max(-MAX_COORDINATE_BOUND, Math.min(MAX_COORDINATE_BOUND, command.boundingBox.x)),
+        y: Math.max(-MAX_COORDINATE_BOUND, Math.min(MAX_COORDINATE_BOUND, command.boundingBox.y)),
+        width: Math.min(MAX_COORDINATE_BOUND, Math.max(1, command.boundingBox.width)),
+        height: Math.min(MAX_COORDINATE_BOUND, Math.max(1, command.boundingBox.height)),
+      };
       if (
         scaleHook === undefined &&
-        previousBox.x === command.boundingBox.x &&
-        previousBox.y === command.boundingBox.y &&
-        previousBox.width === command.boundingBox.width &&
-        previousBox.height === command.boundingBox.height
+        command.pointsSnapshot === undefined &&
+        previousBox.x === targetBox.x &&
+        previousBox.y === targetBox.y &&
+        previousBox.width === targetBox.width &&
+        previousBox.height === targetBox.height
       ) {
         return [];
       }
 
+      const previousSnapshot =
+        shape.kind === SHAPE_KINDS.line
+          ? { start: (shape as LineShape).start, end: (shape as LineShape).end }
+          : shape.kind === SHAPE_KINDS.penPath
+            ? { points: (shape as PenPathShape).points }
+            : undefined;
+
       let nextShape: Shape;
       if (scaleHook !== undefined) {
-        nextShape = scaleHook(shape, previousBox, command.boundingBox);
+        nextShape = scaleHook(shape, previousBox, targetBox);
       } else if (!isCustomShape(shape)) {
         switch (shape.kind) {
           case SHAPE_KINDS.line: {
-            const scaleX =
-              previousBox.width === 0 ? 1 : command.boundingBox.width / previousBox.width;
-            const scaleY =
-              previousBox.height === 0 ? 1 : command.boundingBox.height / previousBox.height;
-            nextShape = {
-              ...shape,
-              boundingBox: command.boundingBox,
-              start: { x: shape.start.x * scaleX, y: shape.start.y * scaleY },
-              end: { x: shape.end.x * scaleX, y: shape.end.y * scaleY },
-            };
+            if (
+              command.pointsSnapshot?.start !== undefined &&
+              command.pointsSnapshot?.end !== undefined
+            ) {
+              nextShape = {
+                ...shape,
+                boundingBox: targetBox,
+                start: command.pointsSnapshot.start,
+                end: command.pointsSnapshot.end,
+              };
+            } else {
+              const scaleX = previousBox.width === 0 ? 1 : targetBox.width / previousBox.width;
+              const scaleY = previousBox.height === 0 ? 1 : targetBox.height / previousBox.height;
+              nextShape = {
+                ...shape,
+                boundingBox: targetBox,
+                start: { x: shape.start.x * scaleX, y: shape.start.y * scaleY },
+                end: { x: shape.end.x * scaleX, y: shape.end.y * scaleY },
+              };
+            }
             break;
           }
           case SHAPE_KINDS.penPath: {
-            const scaleX =
-              previousBox.width === 0 ? 1 : command.boundingBox.width / previousBox.width;
-            const scaleY =
-              previousBox.height === 0 ? 1 : command.boundingBox.height / previousBox.height;
-            nextShape = {
-              ...shape,
-              boundingBox: command.boundingBox,
-              points: shape.points.map((p) => ({ x: p.x * scaleX, y: p.y * scaleY })),
-            };
+            if (command.pointsSnapshot?.points !== undefined) {
+              nextShape = {
+                ...shape,
+                boundingBox: targetBox,
+                points: command.pointsSnapshot.points,
+              };
+            } else {
+              const scaleX = previousBox.width === 0 ? 1 : targetBox.width / previousBox.width;
+              const scaleY = previousBox.height === 0 ? 1 : targetBox.height / previousBox.height;
+              nextShape = {
+                ...shape,
+                boundingBox: targetBox,
+                points: shape.points.map((p) => ({ x: p.x * scaleX, y: p.y * scaleY })),
+              };
+            }
             break;
           }
           default: {
-            nextShape = { ...shape, boundingBox: command.boundingBox };
+            nextShape = { ...shape, boundingBox: targetBox };
             break;
           }
         }
       } else {
-        nextShape = { ...shape, boundingBox: command.boundingBox };
+        nextShape = { ...shape, boundingBox: targetBox };
       }
 
       shapes[command.id] = nextShape;
-      return [{ type: COMMANDS.setShapeBoundingBox, id: command.id, boundingBox: previousBox }];
-    }
-
-    case COMMANDS.setRootStyle: {
-      const shape = shapes[command.id];
-      if (shape === undefined) {
-        throw new DocumentError("shapeNotFound", `no shape with id: ${command.id}`);
-      }
-      if (!isRootId(shape.parentId)) {
-        throw new DocumentError(
-          "invalidShape",
-          "style profile may only be set on root shapes (R-026)",
-        );
-      }
-      const previousStyle = shape.meta.style ?? null;
-      if (previousStyle === command.style) {
-        return [];
-      }
-      const nextMeta = { ...shape.meta };
-      if (command.style === null) {
-        delete nextMeta.style;
-      } else {
-        nextMeta.style = command.style;
-      }
-      shapes[command.id] = { ...shape, meta: nextMeta };
-      return [{ type: COMMANDS.setRootStyle, id: command.id, style: previousStyle }];
-    }
-
-    case COMMANDS.setShapeHiddenOn: {
-      const shape = shapes[command.id];
-      if (shape === undefined) {
-        throw new DocumentError("shapeNotFound", `no shape with id: ${command.id}`);
-      }
-      const previousHiddenOn = shape.meta.hiddenOn ?? null;
-      if (areHiddenOnEqual(previousHiddenOn, command.hiddenOn)) {
-        return [];
-      }
-      const nextMeta = { ...shape.meta };
-      if (command.hiddenOn === null || command.hiddenOn.length === 0) {
-        delete nextMeta.hiddenOn;
-      } else {
-        nextMeta.hiddenOn = command.hiddenOn;
-      }
-      shapes[command.id] = { ...shape, meta: nextMeta };
-      return [{ type: COMMANDS.setShapeHiddenOn, id: command.id, hiddenOn: previousHiddenOn }];
-    }
-
-    case COMMANDS.setShapeOrder: {
-      const shape = shapes[command.id];
-      if (shape === undefined) {
-        throw new DocumentError("shapeNotFound", `no shape with id: ${command.id}`);
-      }
-      const previousOrder = shape.meta.order[command.deviceType] ?? null;
-      if (previousOrder === command.order) {
-        return [];
-      }
-      const nextOrder = { ...shape.meta.order };
-      if (command.order === null) {
-        delete nextOrder[command.deviceType];
-      } else {
-        nextOrder[command.deviceType] = command.order;
-      }
-      shapes[command.id] = { ...shape, meta: { ...shape.meta, order: nextOrder } };
       return [
         {
-          type: COMMANDS.setShapeOrder,
+          type: COMMANDS.setShapeBoundingBox,
           id: command.id,
-          deviceType: command.deviceType,
-          order: previousOrder,
+          boundingBox: previousBox,
+          ...(previousSnapshot !== undefined ? { pointsSnapshot: previousSnapshot } : {}),
         },
       ];
     }
 
     case COMMANDS.setShapeStyle: {
-      const shape = shapes[command.id];
-      if (shape === undefined) {
-        throw new DocumentError("shapeNotFound", `no shape with id: ${command.id}`);
-      }
-      const previousFill = shape.fill === undefined ? null : shape.fill;
-      const previousStroke = shape.stroke === undefined ? null : shape.stroke;
-      const previousStrokeWidth = shape.strokeWidth === undefined ? null : shape.strokeWidth;
-      const previousFillStyle = shape.fillStyle === undefined ? null : shape.fillStyle;
-
-      const targetFill =
-        command.fill === undefined
-          ? shape.fill
-          : command.fill === null
-            ? undefined
-            : parseColor(command.fill, "fill");
-      const targetStroke =
-        command.stroke === undefined
-          ? shape.stroke
-          : command.stroke === null
-            ? undefined
-            : parseColor(command.stroke, "stroke");
-      const targetStrokeWidth =
-        command.strokeWidth === undefined
-          ? shape.strokeWidth
-          : command.strokeWidth === null
-            ? undefined
-            : parseStrokeWidth(command.strokeWidth);
-      const targetFillStyle =
-        command.fillStyle === undefined
-          ? shape.fillStyle
-          : command.fillStyle === null
-            ? undefined
-            : parseFillStyle(command.fillStyle);
-
-      if (
-        shape.fill === targetFill &&
-        shape.stroke === targetStroke &&
-        shape.strokeWidth === targetStrokeWidth &&
-        shape.fillStyle === targetFillStyle
-      ) {
-        return [];
-      }
-
-      const nextShapeData: Record<string, unknown> = { ...shape };
-      if (command.fill !== undefined) {
-        if (targetFill === undefined) {
-          delete nextShapeData.fill;
-        } else {
-          nextShapeData.fill = targetFill;
-        }
-      }
-      if (command.stroke !== undefined) {
-        if (targetStroke === undefined) {
-          delete nextShapeData.stroke;
-        } else {
-          nextShapeData.stroke = targetStroke;
-        }
-      }
-      if (command.strokeWidth !== undefined) {
-        if (targetStrokeWidth === undefined) {
-          delete nextShapeData.strokeWidth;
-        } else {
-          nextShapeData.strokeWidth = targetStrokeWidth;
-        }
-      }
-      if (command.fillStyle !== undefined) {
-        if (targetFillStyle === undefined) {
-          delete nextShapeData.fillStyle;
-        } else {
-          nextShapeData.fillStyle = targetFillStyle;
-        }
-      }
-
-      shapes[command.id] = nextShapeData as unknown as Shape;
-      return [
-        {
-          type: COMMANDS.setShapeStyle,
-          id: command.id,
-          fill: previousFill,
-          stroke: previousStroke,
-          strokeWidth: previousStrokeWidth,
-          fillStyle: previousFillStyle,
-        },
-      ];
+      return applySetShapeStyleToMap(shapes, command);
     }
 
     case COMMANDS.setShapeContent: {
@@ -413,8 +322,14 @@ export function applyCommandToMap(
         const newBoundingBox = isTopLevel
           ? {
               ...shape.boundingBox,
-              x: shape.boundingBox.x + dx,
-              y: shape.boundingBox.y + dy,
+              x: Math.max(
+                -MAX_COORDINATE_BOUND,
+                Math.min(MAX_COORDINATE_BOUND, shape.boundingBox.x + dx),
+              ),
+              y: Math.max(
+                -MAX_COORDINATE_BOUND,
+                Math.min(MAX_COORDINATE_BOUND, shape.boundingBox.y + dy),
+              ),
             }
           : shape.boundingBox;
         shapes[newId] = {
@@ -434,6 +349,13 @@ export function applyCommandToMap(
       const shape = shapes[command.id];
       if (shape === undefined) {
         throw new DocumentError("shapeNotFound", `no shape with id: ${command.id}`);
+      }
+      if (
+        command.data !== null &&
+        command.data !== undefined &&
+        !isJsonSerializable(command.data)
+      ) {
+        throw new DocumentError("invalidMeta", "plugin data must be JSON-serializable");
       }
       const pluginId = parsePluginId(command.pluginId);
       const previousData = shape.meta.pluginData?.[pluginId] ?? null;
@@ -464,6 +386,10 @@ export function applyCommandToMap(
           data: previousData,
         },
       ];
+    }
+
+    case COMMANDS.reorderShapes: {
+      return applyReorderShapesToMap(shapes, command);
     }
   }
 }

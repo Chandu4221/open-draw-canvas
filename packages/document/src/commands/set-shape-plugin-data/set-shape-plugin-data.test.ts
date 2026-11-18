@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type PluginId, parsePluginId, parseShapeId, ROOT_ID } from "@open-draw/contracts";
+import { parsePluginId, parseShapeId, ROOT_ID } from "@open-draw/contracts";
 import { createDocument } from "../../document";
 import { DocumentError } from "../../errors";
 import { createRect } from "../../shape";
@@ -169,15 +169,35 @@ describe("SetShapePluginData command", () => {
     ).toThrow(DocumentError);
   });
 
-  it("throws loudly if pluginId is invalid syntax (R-006)", () => {
+  it("throws DocumentError(invalidMeta) if plugin data is not JSON-serializable", () => {
     const doc = setupDoc();
     expect(() =>
       applySetShapePluginData(doc, {
         type: COMMANDS.setShapePluginData,
         id: shapeId,
-        pluginId: "invalid_unnamespaced" as unknown as PluginId,
-        data: { test: true },
+        pluginId: pluginA,
+        data: { fn: () => "evil" },
       }),
-    ).toThrow(/parsePluginId/);
+    ).toThrow(DocumentError);
+
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    expect(() =>
+      applySetShapePluginData(doc, {
+        type: COMMANDS.setShapePluginData,
+        id: shapeId,
+        pluginId: pluginA,
+        data: circular,
+      }),
+    ).toThrow(DocumentError);
+
+    expect(() =>
+      applySetShapePluginData(doc, {
+        type: COMMANDS.setShapePluginData,
+        id: shapeId,
+        pluginId: pluginA,
+        data: 10n as unknown,
+      }),
+    ).toThrow(DocumentError);
   });
 });

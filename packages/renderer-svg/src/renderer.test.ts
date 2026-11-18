@@ -1,18 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   type CustomShapeKind,
-  DEVICE_TYPES,
   FILL_STYLES,
   MAX_DOCUMENT_DEPTH,
   parseCustomShapeKind,
   parseShapeId,
   ROOT_ID,
+  SHAPE_KINDS,
 } from "@open-draw/contracts";
 import {
   createCustomShape,
   createDocument,
+  createGroup,
   createLine,
-  createPage,
   createPenPath,
   createRect,
   createText,
@@ -20,39 +20,33 @@ import {
 } from "@open-draw/document";
 import {
   documentToSvg,
+  escapeXml,
   fallbackShapeToSvg,
   previewLineToSvg,
   previewPenPathToSvg,
   renderSingleShapeSvg,
   selectionOverlayToSvg,
   type RendererFallbackEvent,
+  type ShapeSvgRenderer,
 } from "./index";
 
 describe("documentToSvg", () => {
   it("renders built-in line and pen-path shapes", () => {
-    const pageId = parseShapeId("page-1");
     const lineId = parseShapeId("line-1");
     const penId = parseShapeId("pen-1");
 
     const doc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
       createLine(
         lineId,
         { x: 10, y: 20, width: 100, height: 50 },
         { x: 0, y: 0 },
         { x: 100, y: 50 },
-        { parent: pageId },
       ),
-      createPenPath(
-        penId,
-        { x: 50, y: 50, width: 80, height: 80 },
-        [
-          { x: 0, y: 0 },
-          { x: 40, y: 80 },
-          { x: 80, y: 0 },
-        ],
-        { parent: pageId },
-      ),
+      createPenPath(penId, { x: 50, y: 50, width: 80, height: 80 }, [
+        { x: 0, y: 0 },
+        { x: 40, y: 80 },
+        { x: 80, y: 0 },
+      ]),
     ]);
 
     const svg = documentToSvg(doc);
@@ -64,17 +58,9 @@ describe("documentToSvg", () => {
   });
 
   it("wraps shape with data-shape-id when wrapShapeId option is true", () => {
-    const pageId = parseShapeId("page-1");
     const rectId = parseShapeId("rect-1");
-    const rectShape = createRect(
-      rectId,
-      { x: 10, y: 20, width: 100, height: 50 },
-      { parent: pageId },
-    );
-    const doc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
-      rectShape,
-    ]);
+    const rectShape = createRect(rectId, { x: 10, y: 20, width: 100, height: 50 });
+    const doc = createDocument([rectShape]);
 
     const svg = documentToSvg(doc, { wrapShapeId: true });
     expect(svg).toContain(`<g data-shape-id="${rectId}">`);
@@ -87,19 +73,11 @@ describe("documentToSvg", () => {
   });
 
   it("renders defined fallback dashed box and fires onFallback for unregistered shape kind (ADR-0003 D3)", () => {
-    const pageId = parseShapeId("page-1");
     const starId = parseShapeId("star-1");
     const starKind = parseCustomShapeKind("vendor:star");
 
     const doc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 500, height: 500 }),
-      createCustomShape(
-        starId,
-        starKind,
-        { x: 20, y: 30, width: 100, height: 100 },
-        {},
-        { parent: pageId },
-      ),
+      createCustomShape(starId, starKind, { x: 20, y: 30, width: 100, height: 100 }),
     ]);
 
     const fallbackEvents: RendererFallbackEvent[] = [];
@@ -114,19 +92,11 @@ describe("documentToSvg", () => {
   });
 
   it("allows customRenderers override", () => {
-    const pageId = parseShapeId("page-1");
     const starId = parseShapeId("star-1");
     const starKind = parseCustomShapeKind("vendor:star");
 
     const doc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 500, height: 500 }),
-      createCustomShape(
-        starId,
-        starKind,
-        { x: 20, y: 30, width: 100, height: 100 },
-        {},
-        { parent: pageId },
-      ),
+      createCustomShape(starId, starKind, { x: 20, y: 30, width: 100, height: 100 }),
     ]);
 
     const onFallback = vi.fn();
@@ -140,67 +110,6 @@ describe("documentToSvg", () => {
 
     expect(svg).toContain('class="custom-star"');
     expect(onFallback).not.toHaveBeenCalled();
-  });
-
-  it("renders ghost presentation when activeDeviceType matches hiddenOn (R-029)", () => {
-    const pageId = parseShapeId("page-1");
-    const rectId = parseShapeId("rect-1");
-
-    const doc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
-      createRect(
-        rectId,
-        { x: 10, y: 10, width: 100, height: 100 },
-        { parent: pageId, meta: { hiddenOn: [DEVICE_TYPES.mobile], order: {} } },
-      ),
-    ]);
-
-    // When activeDeviceType is mobile, shape should be wrapped in ghost group
-    const mobileSvg = documentToSvg(doc, { activeDeviceType: DEVICE_TYPES.mobile });
-    expect(mobileSvg).toContain('<g opacity="0.35" stroke-dasharray="4 4"><rect');
-
-    // When activeDeviceType is desktop, shape should render normally without ghost group
-    const desktopSvg = documentToSvg(doc, { activeDeviceType: DEVICE_TYPES.desktop });
-    expect(desktopSvg).not.toContain('<g opacity="0.35" stroke-dasharray="4 4">');
-    expect(desktopSvg).toContain("<rect");
-
-    // When activeDeviceType is undefined, shape renders normally
-    const normalSvg = documentToSvg(doc);
-    expect(normalSvg).not.toContain('<g opacity="0.35" stroke-dasharray="4 4">');
-  });
-
-  it("renders ghost presentation based on scoped activeDeviceTypes per root (Issues C1, C2)", () => {
-    const root1 = parseShapeId("root-1");
-    const child1 = parseShapeId("child-1");
-    const root2 = parseShapeId("root-2");
-    const child2 = parseShapeId("child-2");
-
-    const doc = createDocument([
-      createPage(root1, { x: 0, y: 0, width: 800, height: 600 }),
-      createRect(
-        child1,
-        { x: 10, y: 10, width: 100, height: 100 },
-        { parent: root1, meta: { hiddenOn: [DEVICE_TYPES.mobile], order: {} } },
-      ),
-      createPage(root2, { x: 900, y: 0, width: 800, height: 600 }),
-      createRect(
-        child2,
-        { x: 10, y: 10, width: 100, height: 100 },
-        { parent: root2, meta: { hiddenOn: [DEVICE_TYPES.mobile], order: {} } },
-      ),
-    ]);
-
-    // root1 scoped to mobile (child1 hidden/ghost), root2 scoped to desktop (child2 normal)
-    const svg = documentToSvg(doc, {
-      activeDeviceTypes: {
-        [root1]: DEVICE_TYPES.mobile,
-        [root2]: DEVICE_TYPES.desktop,
-      },
-    });
-
-    expect(svg).toContain('<g opacity="0.35" stroke-dasharray="4 4"><rect x="10"');
-    expect(svg).not.toContain('<g opacity="0.35" stroke-dasharray="4 4"><rect x="910"');
-    expect(svg).toContain('<rect x="910"');
   });
 });
 
@@ -220,47 +129,33 @@ describe("gesture previews", () => {
   });
 });
 
-describe("crayon render style (ADR-0005 D3, R-021)", () => {
+const MOCK_CUSTOM_RENDERERS: Readonly<Record<string, ShapeSvgRenderer>> = Object.freeze({
+  [SHAPE_KINDS.rect]: (shape, box) =>
+    `<path d="M${box.x},${box.y} L${box.x + box.width},${box.y}" stroke="#2d3748" fill="${shape.fill ?? "none"}" />`,
+});
+
+describe("customRenderers style override (ADR-0005 D3, R-021)", () => {
   it("renders deterministic byte-identical SVG for the same shape across calls", () => {
     const rectId = parseShapeId("rect-1");
     const doc = createDocument([createRect(rectId, { x: 50, y: 60, width: 200, height: 100 })]);
 
-    const run1 = documentToSvg(doc, { styleProfile: "crayon" });
-    const run2 = documentToSvg(doc, { styleProfile: "crayon" });
+    const run1 = documentToSvg(doc, { customRenderers: MOCK_CUSTOM_RENDERERS });
+    const run2 = documentToSvg(doc, { customRenderers: MOCK_CUSTOM_RENDERERS });
 
     expect(run1).toBe(run2);
     expect(run1).toContain("<path");
     expect(run1).toContain('stroke="#2d3748"');
   });
 
-  it("falls back to standard renderer for custom shape kinds under crayon style (R-021)", () => {
+  it("falls back to standard renderer for custom shape kinds without custom renderer", () => {
     const starId = parseShapeId("star-1");
     const starKind = parseCustomShapeKind("vendor:star");
     const doc = createDocument([
       createCustomShape(starId, starKind, { x: 10, y: 10, width: 80, height: 80 }),
     ]);
 
-    const svg = documentToSvg(doc, { styleProfile: "crayon" });
+    const svg = documentToSvg(doc, { customRenderers: MOCK_CUSTOM_RENDERERS });
     expect(svg).toContain("[vendor:star]");
-  });
-
-  it("inherits crayon style from root ancestor (R-026)", () => {
-    const pageId = parseShapeId("page-1");
-    const rectId = parseShapeId("rect-1");
-
-    const doc = createDocument([
-      createPage(
-        pageId,
-        { x: 0, y: 0, width: 800, height: 600 },
-        { meta: { style: "crayon", order: {} } },
-      ),
-      createRect(rectId, { x: 20, y: 20, width: 100, height: 100 }, { parent: pageId }),
-    ]);
-
-    const svg = documentToSvg(doc);
-    // Child rect should be rendered with crayon wobbled path
-    expect(svg).toContain('<path d="M');
-    expect(svg).toContain('stroke="#2d3748"');
   });
 });
 
@@ -269,9 +164,9 @@ describe("fallback shape escaping", () => {
     const hostileShape = {
       id: parseShapeId("hostile-1"),
       kind: 'vendor:<script>alert("xss")</script>' as unknown as CustomShapeKind,
-      parent: ROOT_ID,
-      box: { x: 0, y: 0, width: 100, height: 100 },
-      meta: { order: {} },
+      parentId: ROOT_ID,
+      boundingBox: { x: 0, y: 0, width: 100, height: 100 },
+      meta: {},
     } as unknown as Shape;
     const box = { x: 0, y: 0, width: 100, height: 100 };
     const svg = fallbackShapeToSvg(hostileShape, box);
@@ -282,10 +177,10 @@ describe("fallback shape escaping", () => {
 
   it("safely renders document nested to MAX_DOCUMENT_DEPTH without stack overflow", () => {
     const shapes: Shape[] = [];
-    const rootPageId = parseShapeId("page-root");
-    shapes.push(createPage(rootPageId, { x: 0, y: 0, width: 1000, height: 1000 }));
+    const rootGroupId = parseShapeId("group-root");
+    shapes.push(createGroup(rootGroupId, { x: 0, y: 0, width: 1000, height: 1000 }));
 
-    let parentId = rootPageId;
+    let parentId = rootGroupId;
     // We add MAX_DOCUMENT_DEPTH - 1 nested rects, so total depth is MAX_DOCUMENT_DEPTH (256)
     for (let i = 1; i < MAX_DOCUMENT_DEPTH; i++) {
       const childId = parseShapeId(`rect-${i}`);
@@ -296,8 +191,8 @@ describe("fallback shape escaping", () => {
     const doc = createDocument(shapes);
     const svg = documentToSvg(doc);
     expect(typeof svg).toBe("string");
-    // Should render 1 page rect + 255 child rects = 256 rects
-    expect(svg.match(/<rect/g)?.length).toBe(MAX_DOCUMENT_DEPTH);
+    // Should render 255 child rects
+    expect(svg.match(/<rect/g)?.length).toBe(MAX_DOCUMENT_DEPTH - 1);
   });
 });
 
@@ -460,14 +355,12 @@ describe("visible text on shapes (F2, ADR-0006 Option A / shape.content)", () =>
 
   describe("shape fillStyle rendering (R-005, R-021)", () => {
     it("renders fill=none for fillStyle=none (transparent background)", () => {
-      const pageId = parseShapeId("page-1");
       const rectId = parseShapeId("rect-transparent");
       const doc = createDocument([
-        createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
         createRect(
           rectId,
           { x: 10, y: 20, width: 100, height: 50 },
-          { parent: pageId, fillStyle: FILL_STYLES.none },
+          { fillStyle: FILL_STYLES.none },
         ),
       ]);
       const svg = documentToSvg(doc);
@@ -477,14 +370,12 @@ describe("visible text on shapes (F2, ADR-0006 Option A / shape.content)", () =>
     });
 
     it("renders fill-opacity=0.1 for fillStyle=subtle", () => {
-      const pageId = parseShapeId("page-1");
       const rectId = parseShapeId("rect-subtle");
       const doc = createDocument([
-        createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
         createRect(
           rectId,
           { x: 10, y: 20, width: 100, height: 50 },
-          { parent: pageId, fillStyle: FILL_STYLES.subtle },
+          { fillStyle: FILL_STYLES.subtle },
         ),
       ]);
       const svg = documentToSvg(doc);
@@ -492,14 +383,12 @@ describe("visible text on shapes (F2, ADR-0006 Option A / shape.content)", () =>
     });
 
     it("renders solid fill for fillStyle=solid", () => {
-      const pageId = parseShapeId("page-1");
       const rectId = parseShapeId("rect-solid");
       const doc = createDocument([
-        createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
         createRect(
           rectId,
           { x: 10, y: 20, width: 100, height: 50 },
-          { parent: pageId, fillStyle: FILL_STYLES.solid, fill: "#3b82f6" },
+          { fillStyle: FILL_STYLES.solid, fill: "#3b82f6" },
         ),
       ]);
       const svg = documentToSvg(doc);
@@ -507,14 +396,12 @@ describe("visible text on shapes (F2, ADR-0006 Option A / shape.content)", () =>
     });
 
     it("renders SVG pattern defs and fill=url(#...) for fillStyle=hatch", () => {
-      const pageId = parseShapeId("page-1");
       const rectId = parseShapeId("rect-hatch");
       const doc = createDocument([
-        createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
         createRect(
           rectId,
           { x: 10, y: 20, width: 100, height: 50 },
-          { parent: pageId, fillStyle: FILL_STYLES.hatch, stroke: "#ef4444" },
+          { fillStyle: FILL_STYLES.hatch, stroke: "#ef4444" },
         ),
       ]);
       const svg = documentToSvg(doc, { instanceId: "inst1" });
@@ -524,19 +411,30 @@ describe("visible text on shapes (F2, ADR-0006 Option A / shape.content)", () =>
       expect(svg).toContain('fill="url(#od-pattern-hatch-inst1-rect-hatch)"');
     });
 
-    it("renders fillStyle in crayon / hand-drawn mode (R-021)", () => {
-      const pageId = parseShapeId("page-1");
-      const rectId = parseShapeId("rect-crayon-transp");
+    it("renders fillStyle with custom renderers (R-021)", () => {
+      const rectId = parseShapeId("rect-custom-transp");
       const doc = createDocument([
-        createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
         createRect(
           rectId,
           { x: 10, y: 20, width: 100, height: 50 },
-          { parent: pageId, fillStyle: FILL_STYLES.none },
+          { fillStyle: FILL_STYLES.none },
         ),
       ]);
-      const svg = documentToSvg(doc, { styleProfile: "crayon" });
+      const svg = documentToSvg(doc, { customRenderers: MOCK_CUSTOM_RENDERERS });
       expect(svg).toContain('fill="none"');
+    });
+
+    it("strips XML 1.0 disallowed control characters and escapes entities", () => {
+      const escaped = escapeXml('Hello\x00\x08World\x0B & <tag> "quotes"');
+      expect(escaped).toBe("HelloWorld &amp; &lt;tag&gt; &quot;quotes&quot;");
+
+      const textId = parseShapeId("text-ctrl");
+      const doc = createDocument([
+        createText(textId, { x: 0, y: 0, width: 100, height: 30 }, { content: "Bad\x00Text" }),
+      ]);
+      const svg = documentToSvg(doc);
+      expect(svg).toContain("BadText");
+      expect(svg).not.toContain("\x00");
     });
   });
 });

@@ -7,6 +7,8 @@ export const KEY_CODES = {
   escape: "Escape",
   delete: "Delete",
   backspace: "Backspace",
+  bracketLeft: "BracketLeft",
+  bracketRight: "BracketRight",
 } as const;
 
 export type KeyCode = (typeof KEY_CODES)[keyof typeof KEY_CODES];
@@ -40,6 +42,10 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = [
   { code: "KeyD", ctrlOrMeta: true, action: ACTIONS.duplicate },
   { code: "KeyC", ctrlOrMeta: true, action: ACTIONS.copy },
   { code: "KeyV", ctrlOrMeta: true, action: ACTIONS.paste },
+  { code: "BracketRight", ctrlOrMeta: true, shiftKey: true, action: ACTIONS.bringToFront },
+  { code: "BracketRight", ctrlOrMeta: true, action: ACTIONS.bringForward },
+  { code: "BracketLeft", ctrlOrMeta: true, shiftKey: true, action: ACTIONS.sendToBack },
+  { code: "BracketLeft", ctrlOrMeta: true, action: ACTIONS.sendBackward },
   { code: "KeyV", action: ACTIONS.selectTool },
   { code: "Digit1", action: ACTIONS.selectTool },
   { code: "KeyR", action: ACTIONS.selectToolRect },
