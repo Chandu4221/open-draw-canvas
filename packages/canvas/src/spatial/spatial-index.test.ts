@@ -1,7 +1,7 @@
 // Tests for 2D STR R-Tree spatial index (R-015, ADR-0011).
 import { describe, expect, it } from "vitest";
 import { parseShapeId } from "@open-draw/contracts";
-import { createDocument, createPage, createRect, type Document } from "@open-draw/document";
+import { createDocument, createGroup, createRect, type Document } from "@open-draw/document";
 import { createCanvas } from "../create-canvas";
 import {
   buildSpatialIndexFromDocument,
@@ -144,14 +144,14 @@ describe("querySpatialIndexBox", () => {
 
 describe("buildSpatialIndexFromDocument", () => {
   it("builds index from canonical document with correct zIndex ordering", () => {
-    const pageId = parseShapeId("page-1");
+    const groupId = parseShapeId("group-1");
     const rectA = parseShapeId("rect-a");
     const rectB = parseShapeId("rect-b");
 
     const doc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
-      createRect(rectA, { x: 10, y: 10, width: 100, height: 100 }, { parent: pageId }),
-      createRect(rectB, { x: 50, y: 50, width: 100, height: 100 }, { parent: pageId }),
+      createGroup(groupId, { x: 0, y: 0, width: 800, height: 600 }),
+      createRect(rectA, { x: 10, y: 10, width: 100, height: 100 }, { parent: groupId }),
+      createRect(rectB, { x: 50, y: 50, width: 100, height: 100 }, { parent: groupId }),
     ]);
 
     const index = buildSpatialIndexFromDocument(doc);
@@ -160,7 +160,7 @@ describe("buildSpatialIndexFromDocument", () => {
     const hits = querySpatialIndexPoint(index, { x: 60, y: 60 });
     expect(hits[0]?.id).toBe(rectB);
     expect(hits[1]?.id).toBe(rectA);
-    expect(hits[2]?.id).toBe(pageId);
+    expect(hits[2]?.id).toBe(groupId);
   });
 });
 
@@ -220,16 +220,16 @@ describe("updateSpatialIndexItem", () => {
 
 describe("findIncrementalSpatialChanges & updateSpatialIndexFromDocument", () => {
   it("detects incremental bounding box move and updates document spatial index", () => {
-    const pageId = parseShapeId("p1");
+    const groupId = parseShapeId("p1");
     const rect1 = parseShapeId("r1");
     const doc1 = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
-      createRect(rect1, { x: 10, y: 10, width: 50, height: 50 }, { parent: pageId }),
+      createGroup(groupId, { x: 0, y: 0, width: 800, height: 600 }),
+      createRect(rect1, { x: 10, y: 10, width: 50, height: 50 }, { parent: groupId }),
     ]);
 
     const doc2 = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
-      createRect(rect1, { x: 200, y: 200, width: 50, height: 50 }, { parent: pageId }),
+      createGroup(groupId, { x: 0, y: 0, width: 800, height: 600 }),
+      createRect(rect1, { x: 200, y: 200, width: 50, height: 50 }, { parent: groupId }),
     ]);
 
     const changes = findIncrementalSpatialChanges(doc1, doc2);
@@ -239,36 +239,36 @@ describe("findIncrementalSpatialChanges & updateSpatialIndexFromDocument", () =>
     const updatedIndex = updateSpatialIndexFromDocument(initialIndex, doc1, doc2, changes!);
     expect(updatedIndex).not.toBeNull();
 
-    expect(querySpatialIndexPoint(updatedIndex!, { x: 20, y: 20 })).toHaveLength(1); // hits page only
+    expect(querySpatialIndexPoint(updatedIndex!, { x: 20, y: 20 })).toHaveLength(1); // hits group only
     expect(querySpatialIndexPoint(updatedIndex!, { x: 210, y: 210 })[0]?.id).toBe(rect1);
   });
 
   it("returns null when updateSpatialIndexFromDocument encounters missing shape or unindexed item", () => {
-    const pageId = parseShapeId("p1");
+    const groupId = parseShapeId("p1");
     const rect1 = parseShapeId("r1");
     const doc1 = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
-      createRect(rect1, { x: 10, y: 10, width: 50, height: 50 }, { parent: pageId }),
+      createGroup(groupId, { x: 0, y: 0, width: 800, height: 600 }),
+      createRect(rect1, { x: 10, y: 10, width: 50, height: 50 }, { parent: groupId }),
     ]);
     const doc2 = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
-      createRect(rect1, { x: 200, y: 200, width: 50, height: 50 }, { parent: pageId }),
+      createGroup(groupId, { x: 0, y: 0, width: 800, height: 600 }),
+      createRect(rect1, { x: 200, y: 200, width: 50, height: 50 }, { parent: groupId }),
     ]);
 
     // Build index that does NOT have rect1
     const incompleteIndex = createSpatialIndex([
-      { id: pageId, box: { x: 0, y: 0, width: 800, height: 600 }, zIndex: 0 },
+      { id: groupId, box: { x: 0, y: 0, width: 800, height: 600 }, zIndex: 0 },
     ]);
     const res = updateSpatialIndexFromDocument(incompleteIndex, doc1, doc2, [rect1]);
     expect(res).toBeNull();
   });
 
   it("updates spatial index incrementally through canvas controller when shape moves", () => {
-    const pageId = parseShapeId("p1");
+    const groupId = parseShapeId("p1");
     const rect1 = parseShapeId("r1");
     const doc1 = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
-      createRect(rect1, { x: 10, y: 10, width: 50, height: 50 }, { parent: pageId }),
+      createGroup(groupId, { x: 0, y: 0, width: 800, height: 600 }),
+      createRect(rect1, { x: 10, y: 10, width: 50, height: 50 }, { parent: groupId }),
     ]);
 
     const canvas = createCanvas();
@@ -277,21 +277,21 @@ describe("findIncrementalSpatialChanges & updateSpatialIndexFromDocument", () =>
 
     // Simulate moving rect1 to (200, 200)
     const doc2 = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
-      createRect(rect1, { x: 200, y: 200, width: 50, height: 50 }, { parent: pageId }),
+      createGroup(groupId, { x: 0, y: 0, width: 800, height: 600 }),
+      createRect(rect1, { x: 200, y: 200, width: 50, height: 50 }, { parent: groupId }),
     ]);
 
     // Query with new doc without calling invalidateSpatialIndex
-    expect(canvas.pickShape(doc2, { x: 20, y: 20 })).toBe(pageId);
+    expect(canvas.pickShape(doc2, { x: 20, y: 20 })).toBe(groupId);
     expect(canvas.pickShape(doc2, { x: 210, y: 210 })).toBe(rect1);
   });
 
   it("falls back to clean full rebuild when incremental spatial update fails and preserves query correctness (P2)", () => {
-    const pageId = parseShapeId("p1");
+    const groupId = parseShapeId("p1");
     const rect1 = parseShapeId("r1");
     const doc1 = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
-      createRect(rect1, { x: 10, y: 10, width: 50, height: 50 }, { parent: pageId }),
+      createGroup(groupId, { x: 0, y: 0, width: 800, height: 600 }),
+      createRect(rect1, { x: 10, y: 10, width: 50, height: 50 }, { parent: groupId }),
     ]);
 
     const canvas = createCanvas();
@@ -305,39 +305,39 @@ describe("findIncrementalSpatialChanges & updateSpatialIndexFromDocument", () =>
 
     // Move rect1 to (200, 200)
     const doc2 = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
-      createRect(rect1, { x: 200, y: 200, width: 50, height: 50 }, { parent: pageId }),
+      createGroup(groupId, { x: 0, y: 0, width: 800, height: 600 }),
+      createRect(rect1, { x: 200, y: 200, width: 50, height: 50 }, { parent: groupId }),
     ]);
 
     // Should detect failed incremental update and fall back to clean full rebuild
     expect(canvas.pickShape(doc2, { x: 210, y: 210 })).toBe(rect1);
-    expect(canvas.pickShape(doc2, { x: 20, y: 20 })).toBe(pageId);
+    expect(canvas.pickShape(doc2, { x: 20, y: 20 })).toBe(groupId);
   });
 
   it("returns null when shapes key iteration order is permuted (stacking order permutation requires full rebuild)", () => {
-    const pageId = parseShapeId("p1");
+    const groupId = parseShapeId("p1");
     const rect1 = parseShapeId("r1");
     const rect2 = parseShapeId("r2");
 
-    const page = createPage(pageId, { x: 0, y: 0, width: 800, height: 600 });
-    const r1 = createRect(rect1, { x: 10, y: 10, width: 50, height: 50 }, { parent: pageId });
-    const r2 = createRect(rect2, { x: 100, y: 100, width: 50, height: 50 }, { parent: pageId });
+    const group = createGroup(groupId, { x: 0, y: 0, width: 800, height: 600 });
+    const r1 = createRect(rect1, { x: 10, y: 10, width: 50, height: 50 }, { parent: groupId });
+    const r2 = createRect(rect2, { x: 100, y: 100, width: 50, height: 50 }, { parent: groupId });
 
     // doc1 keys order: p1, r1, r2
-    const doc1 = createDocument([page, r1, r2]);
+    const doc1 = createDocument([group, r1, r2]);
 
     // doc2 keys order: r2, r1, p1 (permuted key order), with r1 moved
     const r1Moved = createRect(
       rect1,
       { x: 200, y: 200, width: 50, height: 50 },
-      { parent: pageId },
+      { parent: groupId },
     );
     const doc2: Document = {
       schema: doc1.schema,
       shapes: {
         [rect2]: r2,
         [rect1]: r1Moved,
-        [pageId]: page,
+        [groupId]: group,
       },
     };
 

@@ -10,10 +10,6 @@ import { hashShapeId, wobbleEllipse, wobbleLine, wobbleOffset, wobbleRect } from
 const CRAYON_COLORS = {
   stroke: "#2d3748",
   fill: "#ffffff",
-  pageStroke: "#718096",
-  pageDash: "6 4",
-  sectionFill: "#f7fafc",
-  sectionStroke: "#718096",
 } as const;
 
 export type ShapeSvgRenderer = (
@@ -23,16 +19,6 @@ export type ShapeSvgRenderer = (
 ) => string;
 
 export const CRAYON_SHAPE_RENDERERS: Readonly<Record<string, ShapeSvgRenderer>> = Object.freeze({
-  [SHAPE_KINDS.page]: (shape, box) => {
-    const seed = hashShapeId(shape.id);
-    const d = wobbleRect(box.x, box.y, box.width, box.height, seed, 1.5);
-    return `<path d="${d}" fill="none" stroke="${CRAYON_COLORS.pageStroke}" stroke-width="2" stroke-dasharray="${CRAYON_COLORS.pageDash}" stroke-linecap="round" stroke-linejoin="round" />`;
-  },
-  [SHAPE_KINDS.section]: (shape, box) => {
-    const seed = hashShapeId(shape.id);
-    const d = wobbleRect(box.x, box.y, box.width, box.height, seed, 1.8);
-    return `<path d="${d}" fill="${CRAYON_COLORS.sectionFill}" stroke="${CRAYON_COLORS.sectionStroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />`;
-  },
   [SHAPE_KINDS.rect]: (shape, box, options) => {
     const seed = hashShapeId(shape.id);
     const d = wobbleRect(box.x, box.y, box.width, box.height, seed, 2.0);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseShapeId, ROOT_ID } from "@open-draw/contracts";
-import { createDocument, createLine, createPage, createRect, createSection } from ".";
+import { createDocument, createGroup, createLine, createRect } from ".";
 import { applyTransaction, createTransaction } from "./transactions";
 import { COMMANDS } from "./commands/registry";
 import {
@@ -15,24 +15,28 @@ import {
 import { recordHistory, undo, EMPTY_HISTORY } from "./history";
 
 describe("reparent helpers and N-level deep hierarchies", () => {
-  const pageId = parseShapeId("page-1");
-  const sectionId = parseShapeId("section-1");
+  const rootGroupId = parseShapeId("group-root");
+  const subGroupId = parseShapeId("group-sub");
   const cardId = parseShapeId("card-1");
   const buttonId = parseShapeId("button-1");
   const freeRectId = parseShapeId("free-rect-1");
 
   // Hierarchy:
-  // page-1: (100, 100, 800, 600) on ROOT
-  //   section-1: (20, 20, 400, 300) inside page-1 => world (120, 120, 400, 300)
-  //     card-1: (30, 30, 200, 150) inside section-1 => world (150, 150, 200, 150)
+  // group-root: (100, 100, 800, 600) on ROOT
+  //   group-sub: (20, 20, 400, 300) inside group-root => world (120, 120, 400, 300)
+  //     card-1: (30, 30, 200, 150) inside group-sub => world (150, 150, 200, 150)
   //       button-1: (10, 10, 80, 40) inside card-1 => world (160, 160, 80, 40)
   // free-rect-1: (1000, 100, 100, 100) on ROOT => world (1000, 100, 100, 100)
   const doc = createDocument([
-    createPage(pageId, { x: 100, y: 100, width: 800, height: 600 }),
-    createSection(sectionId, { x: 20, y: 20, width: 400, height: 300 }, "row", {
-      parent: pageId,
-    }),
-    createRect(cardId, { x: 30, y: 30, width: 200, height: 150 }, { parent: sectionId }),
+    createGroup(rootGroupId, { x: 100, y: 100, width: 800, height: 600 }),
+    createGroup(
+      subGroupId,
+      { x: 20, y: 20, width: 400, height: 300 },
+      {
+        parent: rootGroupId,
+      },
+    ),
+    createRect(cardId, { x: 30, y: 30, width: 200, height: 150 }, { parent: subGroupId }),
     createRect(
       buttonId,
       { x: 10, y: 10, width: 80, height: 40 },
@@ -44,34 +48,33 @@ describe("reparent helpers and N-level deep hierarchies", () => {
   ]);
 
   describe("isContainerShape", () => {
-    it("identifies page and section as structural containers", () => {
-      expect(isContainerShape(doc.shapes[pageId]!, doc)).toBe(true);
-      expect(isContainerShape(doc.shapes[sectionId]!, doc)).toBe(true);
+    it("identifies groups as structural containers", () => {
+      expect(isContainerShape(doc.shapes[rootGroupId]!, doc)).toBe(true);
+      expect(isContainerShape(doc.shapes[subGroupId]!, doc)).toBe(true);
     });
 
-    it("does not treat plain rectangle on root as a drop container (R-004, R-024, R-026)", () => {
-      // free-rect-1 is a plain rectangle on ROOT_ID
+    it("does not treat plain rectangle on root without children as a drop container", () => {
       expect(isContainerShape(doc.shapes[freeRectId]!, doc)).toBe(false);
     });
 
     it("treats shape with container capability as a container", () => {
-      const pageShapeId = parseShapeId("screen-page");
-      const cardInsidePageId = parseShapeId("card-inside-page");
-      const pageDoc = createDocument([
-        createPage(pageShapeId, { x: 0, y: 0, width: 800, height: 600 }),
+      const panelId = parseShapeId("panel-1");
+      const cardInsidePanelId = parseShapeId("card-inside-panel");
+      const testDoc = createDocument([
+        createGroup(panelId, { x: 0, y: 0, width: 800, height: 600 }),
         createRect(
-          cardInsidePageId,
+          cardInsidePanelId,
           { x: 10, y: 10, width: 200, height: 200 },
-          { parent: pageShapeId },
+          { parent: panelId },
         ),
       ]);
       expect(
-        isContainerShape(pageDoc.shapes[cardInsidePageId]!, pageDoc, (kind) => kind === "rect"),
+        isContainerShape(testDoc.shapes[cardInsidePanelId]!, testDoc, (kind) => kind === "rect"),
       ).toBe(true);
       expect(
         isContainerShape(
-          pageDoc.shapes[cardInsidePageId]!,
-          pageDoc,
+          testDoc.shapes[cardInsidePanelId]!,
+          testDoc,
           (kind) => kind === "custom:panel",
         ),
       ).toBe(false);
@@ -106,14 +109,14 @@ describe("reparent helpers and N-level deep hierarchies", () => {
       expect(target).toBe(ROOT_ID);
     });
 
-    it("returns the root page when dropped inside page but outside section", () => {
+    it("returns the root group when dropped inside root group but outside sub group", () => {
       const target = pickDropTarget(doc, { x: 600, y: 300 }, []);
-      expect(target).toBe(pageId);
+      expect(target).toBe(rootGroupId);
     });
 
-    it("returns the section when dropped inside section but outside card", () => {
+    it("returns the sub group when dropped inside sub group but outside card", () => {
       const target = pickDropTarget(doc, { x: 130, y: 130 }, []);
-      expect(target).toBe(sectionId);
+      expect(target).toBe(subGroupId);
     });
 
     it("returns the card (N-level deep) when dropped inside card", () => {
@@ -122,15 +125,15 @@ describe("reparent helpers and N-level deep hierarchies", () => {
     });
 
     it("excludes the dragged shape and all its descendants to strictly prevent cycles", () => {
-      // If we drag section-1 over card-1 (its own child), section-1 and card-1 must be excluded,
-      // so it falls back to page-1!
-      const target = pickDropTarget(doc, { x: 200, y: 200 }, [sectionId]);
-      expect(target).toBe(pageId);
+      // If we drag subGroupId over card-1 (its own child), subGroupId and card-1 must be excluded,
+      // so it falls back to rootGroupId!
+      const target = pickDropTarget(doc, { x: 200, y: 200 }, [subGroupId]);
+      expect(target).toBe(rootGroupId);
     });
 
     it("falls back to ROOT_ID if all enclosing containers are in the excluded subtree", () => {
-      // If we drag page-1 over card-1, everything inside page-1 is in page-1's subtree
-      const target = pickDropTarget(doc, { x: 200, y: 200 }, [pageId]);
+      // If we drag rootGroupId over card-1, everything inside rootGroupId is in rootGroupId's subtree
+      const target = pickDropTarget(doc, { x: 200, y: 200 }, [rootGroupId]);
       expect(target).toBe(ROOT_ID);
     });
   });
@@ -141,11 +144,11 @@ describe("reparent helpers and N-level deep hierarchies", () => {
       const originalWorldBox = absoluteBoundingBox(doc, button);
       expect(originalWorldBox).toEqual({ x: 160, y: 160, width: 80, height: 40 });
 
-      // Reparent button from card-1 to section-1:
-      const sectionLocalBox = computeReparentBoundingBox(doc, button, sectionId, originalWorldBox);
+      // Reparent button from card-1 to subGroupId:
+      const sectionLocalBox = computeReparentBoundingBox(doc, button, subGroupId, originalWorldBox);
       expect(sectionLocalBox).toEqual({
-        x: originalWorldBox.x - 120, // section-1 world x is 120
-        y: originalWorldBox.y - 120, // section-1 world y is 120
+        x: originalWorldBox.x - 120, // subGroupId world x is 120
+        y: originalWorldBox.y - 120, // subGroupId world y is 120
         width: 80,
         height: 40,
       });
@@ -163,23 +166,23 @@ describe("reparent helpers and N-level deep hierarchies", () => {
     });
 
     it("prunes descendants if their ancestor is also selected", () => {
-      const pruned = pruneSelectedDescendants(doc, [pageId, sectionId, cardId, buttonId]);
-      expect(pruned).toEqual([pageId]);
+      const pruned = pruneSelectedDescendants(doc, [rootGroupId, subGroupId, cardId, buttonId]);
+      expect(pruned).toEqual([rootGroupId]);
     });
 
     it("prunes child when parent and child are selected", () => {
-      const pruned = pruneSelectedDescendants(doc, [sectionId, buttonId]);
-      // button-1 is inside card-1 which is inside section-1
-      expect(pruned).toEqual([sectionId]);
+      const pruned = pruneSelectedDescendants(doc, [subGroupId, buttonId]);
+      // button-1 is inside card-1 which is inside subGroupId
+      expect(pruned).toEqual([subGroupId]);
     });
   });
 
   describe("end-to-end reparent transaction across N levels", () => {
-    it("reparents from ROOT_ID into Page, then into Card, and back to ROOT with full undo/redo", () => {
+    it("reparents from ROOT_ID into Group, then into Card, and back to ROOT with full undo/redo", () => {
       const freeRect = doc.shapes[freeRectId]!;
       const initialWorldBox = absoluteBoundingBox(doc, freeRect);
 
-      // 1. Move freeRect into card-1 (N=3 levels deep: ROOT -> page -> section -> card)
+      // 1. Move freeRect into card-1 (N=3 levels deep: ROOT -> rootGroup -> subGroup -> card)
       const newWorldBox = { x: 180, y: 180, width: 100, height: 100 };
       const cardLocalBox = computeReparentBoundingBox(doc, freeRect, cardId, newWorldBox);
 
@@ -201,7 +204,7 @@ describe("reparent helpers and N-level deep hierarchies", () => {
 
       // Verify ancestry
       const ancestors = ancestorsOf(step1.document, reparented1);
-      expect(ancestors.map((a) => a.id)).toEqual([cardId, sectionId, pageId]);
+      expect(ancestors.map((a) => a.id)).toEqual([cardId, subGroupId, rootGroupId]);
 
       // 2. Reparent back to ROOT_ID
       const exitWorldBox = { x: 500, y: 500, width: 100, height: 100 };

@@ -5,7 +5,7 @@
 import type { ShapeId } from "@open-draw/contracts";
 import { MAX_DOCUMENT_DEPTH, SHAPE_KINDS, isRootId } from "@open-draw/contracts";
 import { DocumentError } from "./errors";
-import type { Shape } from "./shape";
+import { isCustomShape, type Shape } from "./shape";
 
 export const SCHEMA_VERSION = 1 as const;
 
@@ -18,11 +18,7 @@ export interface Document {
   readonly shapes: Readonly<Record<ShapeId, Shape>>;
 }
 
-export const CONTAINER_KINDS: ReadonlySet<string> = new Set([
-  SHAPE_KINDS.page,
-  SHAPE_KINDS.section,
-  SHAPE_KINDS.rect,
-]);
+export const CONTAINER_KINDS: ReadonlySet<string> = new Set([SHAPE_KINDS.group, SHAPE_KINDS.rect]);
 
 function validateStructure(shapes: Readonly<Record<ShapeId, Shape>>): void {
   for (const shape of Object.values(shapes)) {
@@ -56,11 +52,11 @@ function validateStructure(shapes: Readonly<Record<ShapeId, Shape>>): void {
       const parentShape = shapes[shape.parentId];
       const isValidContainer =
         parentShape !== undefined &&
-        (CONTAINER_KINDS.has(parentShape.kind) || isRootId(parentShape.parentId));
+        (CONTAINER_KINDS.has(parentShape.kind) || isCustomShape(parentShape));
       if (!isValidContainer) {
         throw new DocumentError(
           "invalidShape",
-          `parent must be a root shape, page, section, or rect, got: ${parentShape?.kind} (${shape.id})`,
+          `parent must be a container shape (group, rect, or custom container), got: ${parentShape?.kind} (${shape.id})`,
         );
       }
     }

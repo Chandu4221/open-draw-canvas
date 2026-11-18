@@ -1,7 +1,6 @@
 import type {
   BoundingBox,
   CustomShapeKind,
-  DeviceType,
   FillStyle,
   PluginId,
   Point,
@@ -21,7 +20,6 @@ export interface EditorOverlayContext {
   readonly selectedIds: readonly ShapeId[];
   readonly camera: Camera;
   readonly zoom: number;
-  readonly activeDeviceType?: DeviceType | undefined;
   readonly canvas: CanvasController;
 }
 
@@ -79,11 +77,6 @@ export interface Editor {
       readonly fillStyle?: FillStyle | null | undefined;
     },
   ): void;
-  /**
-   * @deprecated Use `reorderShapes`, `bringToFront`, `sendToBack`, `bringForward`, or `sendBackward` for visual z-ordering.
-   * `setShapeOrder` only mutates device-specific reading order metadata (`meta.order`) and does not affect canvas visual rendering.
-   */
-  setShapeOrder(id: ShapeId, deviceType: DeviceType, order: number | null): void;
   setShapePluginData(id: ShapeId, pluginId: PluginId, data: unknown | null): void;
   bringToFront(ids?: readonly ShapeId[]): void;
   sendToBack(ids?: readonly ShapeId[]): void;

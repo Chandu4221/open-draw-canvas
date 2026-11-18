@@ -140,7 +140,6 @@ See [custom-shapes.md](docs/custom-shapes.md) for full documentation on custom s
 - **Camera Navigation**: `getCamera()`, `setCamera(cam)`, `zoomIn()`, `zoomOut()`, `resetZoom()`
 - **Shape Modification**: `setTextContent(id, text)`, `setShapeStyle(id, style)`, `setShapePluginData(id, pluginId, data)`
 - **Visual Z-Ordering**: `bringToFront(ids?)`, `sendToBack(ids?)`, `bringForward(ids?)`, `sendBackward(ids?)`
-- **Metadata**: `setShapeOrder(id, deviceType, order)` _(deprecated: sets device reading order metadata in `meta.order`; does not affect visual z-order)_
 - **Extensions**: `registerCustomShape(ext)`, `getCustomShape(kind)`, `getCustomShapes()`, `insertCustomShape(kind, box, opts?)`
 - **Lifecycle**: `render()`, `destroy()`, `subscribe(event, listener)`
 
@@ -154,22 +153,19 @@ For custom engines or server-side usage without DOM:
 import {
   createCanvas,
   createDocument,
-  createPage,
   createRect,
   documentToSvg,
   parseShapeId,
 } from "@open-draw/canvas";
 
 const canvas = createCanvas();
-const pageId = parseShapeId("page-1");
 const rectId = parseShapeId("rect-1");
 
 const doc = createDocument([
-  createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
   createRect(
     rectId,
     { x: 50, y: 50, width: 200, height: 100 },
-    { parentId: pageId, fill: "#3b82f6", stroke: "#1e40af" },
+    { fill: "#3b82f6", stroke: "#1e40af" },
   ),
 ]);
 

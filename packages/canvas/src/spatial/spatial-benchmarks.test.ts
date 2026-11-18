@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { parseShapeId } from "@open-draw/contracts";
 import {
   createDocument,
-  createPage,
+  createGroup,
   createRect,
   type Document,
   type Shape,
@@ -18,8 +18,8 @@ import { createCanvas } from "../create-canvas";
 
 describe("Spatial Index Scale & Performance (ADR-0011)", () => {
   it("bulk-builds and queries a 2,000 shape document under tight performance budgets", () => {
-    const pageId = parseShapeId("page-main");
-    const shapes: Shape[] = [createPage(pageId, { x: 0, y: 0, width: 5000, height: 5000 })];
+    const groupId = parseShapeId("group-main");
+    const shapes: Shape[] = [createGroup(groupId, { x: 0, y: 0, width: 5000, height: 5000 })];
 
     // Generate 2,000 shapes in a 50 x 40 grid
     const totalShapes = 2000;
@@ -31,7 +31,7 @@ describe("Spatial Index Scale & Performance (ADR-0011)", () => {
         createRect(
           parseShapeId(`rect-${i}`),
           { x: col * 80 + 10, y: row * 80 + 10, width: 60, height: 60 },
-          { parent: pageId },
+          { parent: groupId },
         ),
       );
     }
@@ -85,8 +85,8 @@ describe("Spatial Index Scale & Performance (ADR-0011)", () => {
   });
 
   it("incrementally updates spatial index on 2,000 shapes in sub-millisecond time", () => {
-    const pageId = parseShapeId("page-main");
-    const shapes: Shape[] = [createPage(pageId, { x: 0, y: 0, width: 5000, height: 5000 })];
+    const groupId = parseShapeId("group-main");
+    const shapes: Shape[] = [createGroup(groupId, { x: 0, y: 0, width: 5000, height: 5000 })];
 
     const totalShapes = 2000;
     const cols = 50;
@@ -97,7 +97,7 @@ describe("Spatial Index Scale & Performance (ADR-0011)", () => {
         createRect(
           parseShapeId(`rect-${i}`),
           { x: col * 80 + 10, y: row * 80 + 10, width: 60, height: 60 },
-          { parent: pageId },
+          { parent: groupId },
         ),
       );
     }
@@ -109,7 +109,7 @@ describe("Spatial Index Scale & Performance (ADR-0011)", () => {
 
     // Initial position of rect-1 is (10, 10, 60, 60)
     expect(canvas.pickShape(doc1, { x: 20, y: 20 })).toBe(parseShapeId("rect-1"));
-    expect(canvas.pickShape(doc1, { x: 4500, y: 4500 })).toBe(pageId);
+    expect(canvas.pickShape(doc1, { x: 4500, y: 4500 })).toBe(groupId);
 
     // Move rect-1 to (4480, 4480, 60, 60)
     const targetId = parseShapeId("rect-1");
@@ -152,7 +152,7 @@ describe("Spatial Index Scale & Performance (ADR-0011)", () => {
     expect(finalIndex.count).toBe(totalShapes + 1);
 
     // 3. Verify hit accuracy: old location no longer hits rect-1, new location hits rect-1
-    expect(canvas.pickShape(finalDoc, { x: 20, y: 20 })).toBe(pageId);
+    expect(canvas.pickShape(finalDoc, { x: 20, y: 20 })).toBe(groupId);
     expect(canvas.pickShape(finalDoc, { x: 4485, y: 4485 })).toBe(targetId);
 
     // Verify marquee query accuracy with moved shape

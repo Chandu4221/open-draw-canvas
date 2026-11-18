@@ -14,8 +14,8 @@ import { parseDocument } from "./parse-document";
 import { serializeDocument } from "./serialize-document";
 import {
   createCustomShape,
+  createGroup,
   createLine,
-  createPage,
   createPenPath,
   createRect,
   type CustomShape,
@@ -25,14 +25,14 @@ import {
 
 describe("serializeDocument & parseDocument", () => {
   it("round-trips a document byte-stably", () => {
-    const pageId = parseShapeId("page-1");
+    const groupId = parseShapeId("group-1");
     const rectId = parseShapeId("rect-1");
     const doc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
+      createGroup(groupId, { x: 0, y: 0, width: 800, height: 600 }),
       createRect(
         rectId,
         { x: 10, y: 20, width: 100, height: 80 },
-        { parent: pageId, label: "Box" },
+        { parent: groupId, label: "Box" },
       ),
     ]);
 
@@ -45,16 +45,16 @@ describe("serializeDocument & parseDocument", () => {
   });
 
   it("preserves sibling z-order across serialization round-trip", () => {
-    const pageId = parseShapeId("page-1");
+    const groupId = parseShapeId("group-1");
     const r1 = parseShapeId("r-1");
     const r2 = parseShapeId("r-2");
     const r3 = parseShapeId("r-3");
 
     const doc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
-      createRect(r1, { x: 10, y: 10, width: 20, height: 20 }, { parent: pageId }),
-      createRect(r2, { x: 20, y: 20, width: 20, height: 20 }, { parent: pageId }),
-      createRect(r3, { x: 30, y: 30, width: 20, height: 20 }, { parent: pageId }),
+      createGroup(groupId, { x: 0, y: 0, width: 800, height: 600 }),
+      createRect(r1, { x: 10, y: 10, width: 20, height: 20 }, { parent: groupId }),
+      createRect(r2, { x: 20, y: 20, width: 20, height: 20 }, { parent: groupId }),
+      createRect(r3, { x: 30, y: 30, width: 20, height: 20 }, { parent: groupId }),
     ]);
 
     const serialized = serializeDocument(doc);
@@ -66,36 +66,28 @@ describe("serializeDocument & parseDocument", () => {
   });
 
   it("never includes ROOT_ID in serialized shapes", () => {
-    const pageId = parseShapeId("page-1");
-    const doc = createDocument([createPage(pageId, { x: 0, y: 0, width: 100, height: 100 })]);
+    const groupId = parseShapeId("group-1");
+    const doc = createDocument([createGroup(groupId, { x: 0, y: 0, width: 100, height: 100 })]);
     const serialized = serializeDocument(doc);
     expect(serialized).not.toContain('"__root__"');
   });
 
   it("round-trips line and pen-path shapes byte-stably", () => {
-    const pageId = parseShapeId("page-1");
     const lineId = parseShapeId("line-1");
     const penId = parseShapeId("pen-1");
 
     const doc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 1000, height: 1000 }),
       createLine(
         lineId,
         { x: 100, y: 100, width: 200, height: 150 },
         { x: 0, y: 0 },
         { x: 200, y: 150 },
-        { parent: pageId },
       ),
-      createPenPath(
-        penId,
-        { x: 50, y: 50, width: 80, height: 80 },
-        [
-          { x: 0, y: 10 },
-          { x: 40, y: 80 },
-          { x: 80, y: 0 },
-        ],
-        { parent: pageId },
-      ),
+      createPenPath(penId, { x: 50, y: 50, width: 80, height: 80 }, [
+        { x: 0, y: 10 },
+        { x: 40, y: 80 },
+        { x: 80, y: 0 },
+      ]),
     ]);
 
     const serialized = serializeDocument(doc);
@@ -116,20 +108,16 @@ describe("serializeDocument & parseDocument", () => {
   });
 
   it("preserves meta.pluginData opaquely and byte-stably (R-044)", () => {
-    const pageId = parseShapeId("page-1");
     const rectId = parseShapeId("rect-1");
     const pluginA = parsePluginId("third-party:analytics");
     const pluginB = parsePluginId("custom-vendor:settings");
 
     const doc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 500, height: 500 }),
       createRect(
         rectId,
         { x: 20, y: 20, width: 100, height: 100 },
         {
-          parent: pageId,
           meta: {
-            order: {},
             pluginData: {
               [pluginA]: { views: 42, tags: ["chart", "primary"], enabled: true },
               [pluginB]: { nested: { deep: "value", list: [1, 2, 3] } },
@@ -157,7 +145,6 @@ describe("serializeDocument & parseDocument", () => {
   });
 
   it("rejects non-serializable pluginData at serialize time with DocumentError (R-044)", () => {
-    const pageId = parseShapeId("page-1");
     const rectId = parseShapeId("rect-1");
     const pluginA = parsePluginId("vendor:broken");
 
@@ -165,14 +152,11 @@ describe("serializeDocument & parseDocument", () => {
     circular.self = circular;
 
     const doc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 500, height: 500 }),
       createRect(
         rectId,
         { x: 20, y: 20, width: 100, height: 100 },
         {
-          parent: pageId,
           meta: {
-            order: {},
             pluginData: {
               [pluginA]: circular,
             },
@@ -188,13 +172,12 @@ describe("serializeDocument & parseDocument", () => {
     const raw = JSON.stringify({
       schema: { version: 1 },
       shapes: {
-        "page-1": {
-          id: "page-1",
-          kind: "page",
+        "rect-1": {
+          id: "rect-1",
+          kind: "rect",
           parent: "canvas:root",
           boundingBox: { x: 0, y: 0, width: 100, height: 100 },
           meta: {
-            order: {},
             pluginData: {
               InvalidPluginIdWithoutColon: { foo: "bar" },
             },
@@ -207,18 +190,15 @@ describe("serializeDocument & parseDocument", () => {
   });
 
   it("round-trips custom shape kinds byte-stably", () => {
-    const pageId = parseShapeId("page-1");
     const starId = parseShapeId("star-1");
     const starKind = parseCustomShapeKind("vendor:star");
 
     const doc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 500, height: 500 }),
       createCustomShape(
         starId,
         starKind,
         { x: 30, y: 30, width: 60, height: 60 },
         { pointsCount: 5, innerRadius: 15 },
-        { parent: pageId },
       ),
     ]);
 
@@ -231,57 +211,28 @@ describe("serializeDocument & parseDocument", () => {
     expect((parsed.shapes[starId] as CustomShape).customData?.pointsCount).toBe(5);
   });
 
-  it("round-trips root theme, dark mode, and design style metadata", () => {
-    const pageId = parseShapeId("page-1");
-    const doc = createDocument([
-      createPage(
-        pageId,
-        { x: 0, y: 0, width: 500, height: 500 },
-        {
-          meta: {
-            order: {},
-            theme: { primary: "#ff0000", surface: "#111111" },
-            darkMode: true,
-            designStyle: "neoBrutalism",
-          },
-        },
-      ),
-    ]);
-    const serialized = serializeDocument(doc);
-    const parsed = parseDocument(serialized);
-    expect(parsed.shapes[pageId]?.meta.theme).toEqual({ primary: "#ff0000", surface: "#111111" });
-    expect(parsed.shapes[pageId]?.meta.darkMode).toBe(true);
-    expect(parsed.shapes[pageId]?.meta.designStyle).toBe("neoBrutalism");
-  });
-
   it("round-trips shape fillStyle byte-stably across all variants (R-005, R-041)", () => {
-    const pageId = parseShapeId("page-1");
     const rNone = parseShapeId("r-none");
     const rSubtle = parseShapeId("r-subtle");
     const rSolid = parseShapeId("r-solid");
     const rHatch = parseShapeId("r-hatch");
 
     const doc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
-      createRect(
-        rNone,
-        { x: 10, y: 10, width: 100, height: 50 },
-        { parent: pageId, fillStyle: FILL_STYLES.none },
-      ),
+      createRect(rNone, { x: 10, y: 10, width: 100, height: 50 }, { fillStyle: FILL_STYLES.none }),
       createRect(
         rSubtle,
         { x: 120, y: 10, width: 100, height: 50 },
-        { parent: pageId, fillStyle: FILL_STYLES.subtle },
+        { fillStyle: FILL_STYLES.subtle },
       ),
       createRect(
         rSolid,
         { x: 230, y: 10, width: 100, height: 50 },
-        { parent: pageId, fillStyle: FILL_STYLES.solid },
+        { fillStyle: FILL_STYLES.solid },
       ),
       createRect(
         rHatch,
         { x: 340, y: 10, width: 100, height: 50 },
-        { parent: pageId, fillStyle: FILL_STYLES.hatch },
+        { fillStyle: FILL_STYLES.hatch },
       ),
     ]);
 
@@ -303,9 +254,9 @@ describe("serializeDocument & parseDocument", () => {
         "shape-1": {
           id: "shape-1",
           kind: "plain-unnamespaced",
-          parent: "page-1",
+          parent: "group-1",
           boundingBox: { x: 0, y: 0, width: 10, height: 10 },
-          meta: { order: {} },
+          meta: {},
         },
       },
     });
@@ -332,28 +283,14 @@ describe("serializeDocument & parseDocument", () => {
   });
 
   it("round-trips custom meta properties byte-stably", () => {
-    const pageId = parseShapeId("page-1");
     const buttonId = parseShapeId("button-1");
 
     const doc = createDocument([
-      createPage(
-        pageId,
-        { x: 0, y: 0, width: 1440, height: 900 },
-        {
-          meta: {
-            order: {},
-            platform: "web",
-            style: "minimal",
-          },
-        },
-      ),
       createRect(
         buttonId,
         { x: 100, y: 100, width: 120, height: 40 },
         {
-          parent: pageId,
           meta: {
-            order: {},
             customTag: {
               id: "button",
               variant: "primary",
@@ -370,8 +307,6 @@ describe("serializeDocument & parseDocument", () => {
     const reSerialized = serializeDocument(parsed);
 
     expect(reSerialized).toBe(serialized);
-    expect(parsed.shapes[pageId]?.meta.platform).toBe("web");
-    expect(parsed.shapes[pageId]?.meta.style).toBe("minimal");
     expect((parsed.shapes[buttonId]?.meta.customTag as { variant: string })?.variant).toBe(
       "primary",
     );
@@ -381,18 +316,14 @@ describe("serializeDocument & parseDocument", () => {
   });
 
   it("throws DocumentError when custom meta contains non-serializable values", () => {
-    const pageId = parseShapeId("page-1");
     const buttonId = parseShapeId("button-1");
 
     const doc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 1440, height: 900 }),
       createRect(
         buttonId,
         { x: 100, y: 100, width: 120, height: 40 },
         {
-          parent: pageId,
           meta: {
-            order: {},
             customTag: {
               fn: (() => {}) as unknown as string,
             },
@@ -407,16 +338,13 @@ describe("serializeDocument & parseDocument", () => {
 
 describe("applySetShapeBoundingBox point scaling", () => {
   it("scales line endpoints proportionally on resize", () => {
-    const pageId = parseShapeId("page-1");
     const lineId = parseShapeId("line-1");
     const doc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 1000, height: 1000 }),
       createLine(
         lineId,
         { x: 10, y: 10, width: 100, height: 50 },
         { x: 10, y: 10 },
         { x: 90, y: 40 },
-        { parent: pageId },
       ),
     ]);
 
@@ -433,19 +361,12 @@ describe("applySetShapeBoundingBox point scaling", () => {
   });
 
   it("scales pen-path points proportionally on resize", () => {
-    const pageId = parseShapeId("page-1");
     const penId = parseShapeId("pen-1");
     const doc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 1000, height: 1000 }),
-      createPenPath(
-        penId,
-        { x: 20, y: 20, width: 100, height: 100 },
-        [
-          { x: 10, y: 20 },
-          { x: 50, y: 60 },
-        ],
-        { parent: pageId },
-      ),
+      createPenPath(penId, { x: 20, y: 20, width: 100, height: 100 }, [
+        { x: 10, y: 20 },
+        { x: 50, y: 60 },
+      ]),
     ]);
 
     const result = applySetShapeBoundingBox(doc, {
@@ -462,17 +383,14 @@ describe("applySetShapeBoundingBox point scaling", () => {
   });
 
   it("rejects customData attempting to override reserved shape properties (C7)", () => {
-    const pageId = parseShapeId("page-1");
     const customId = parseShapeId("custom-1");
     const kind = parseCustomShapeKind("vendor:widget");
     const doc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 1000, height: 1000 }),
       createCustomShape(
         customId,
         kind,
         { x: 10, y: 10, width: 100, height: 100 },
         { id: "overridden-id", validKey: "validValue" },
-        { parent: pageId },
       ),
     ]);
 

@@ -150,11 +150,7 @@ export function attachPointerListeners(
     let originalBox: BoundingBox | null = null;
     if (selectedIds.length === 1) {
       const shape = doc.shapes[selectedIds[0]!];
-      if (
-        shape !== undefined &&
-        shape.kind !== "page" &&
-        canvas.hasCapability(shape.kind, CAPABILITIES.resizable)
-      ) {
+      if (shape !== undefined && canvas.hasCapability(shape.kind, CAPABILITIES.resizable)) {
         originalBox = absoluteBoundingBox(doc, shape);
         handle = canvas.pickHandle(originalBox, screen);
       }
@@ -167,7 +163,7 @@ export function attachPointerListeners(
         const boxes: BoundingBox[] = [];
         for (const id of selectedIds) {
           const s = doc.shapes[id];
-          if (s !== undefined && s.kind !== "page") {
+          if (s !== undefined) {
             boxes.push(absoluteBoundingBox(doc, s));
           }
         }
@@ -247,14 +243,14 @@ export function attachPointerListeners(
     if (originalBox === null && shapeIds.length > 0) {
       if (shapeIds.length === 1) {
         const s = doc.shapes[shapeIds[0]!];
-        if (s !== undefined && s.kind !== "page") {
+        if (s !== undefined) {
           originalBox = absoluteBoundingBox(doc, s);
         }
       } else {
         const boxes: BoundingBox[] = [];
         for (const id of shapeIds) {
           const s = doc.shapes[id];
-          if (s !== undefined && s.kind !== "page") {
+          if (s !== undefined) {
             boxes.push(absoluteBoundingBox(doc, s));
           }
         }
@@ -372,7 +368,6 @@ export function attachPointerListeners(
         viewportBox,
         zoom: canvas.getCamera().zoom,
         thresholdPx,
-        activeDeviceType: canvas.getActiveDeviceType(),
         childIndex: cachedChildIndex ?? undefined,
       });
       effectiveWorld = snapRes.snappedWorld;

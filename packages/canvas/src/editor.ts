@@ -4,7 +4,6 @@ import {
   isRootId,
   type BoundingBox,
   type CustomShapeKind,
-  type DeviceType,
   type PluginId,
   type Point,
   type ShapeId,
@@ -65,7 +64,6 @@ function isPropertyMutationCommand(cmd: Command): boolean {
     cmd.type === COMMANDS.setShapeStyle ||
     cmd.type === COMMANDS.setShapeLabel ||
     cmd.type === COMMANDS.setShapeContent ||
-    cmd.type === COMMANDS.setShapeHiddenOn ||
     cmd.type === COMMANDS.setShapePluginData
   );
 }
@@ -227,8 +225,6 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     }
 
     const renderOpts = {
-      activeDeviceType: canvas.getActiveDeviceType(),
-      activeDeviceTypes: canvas.getActiveDeviceTypes(),
       customRenderers: activeCustomRenderers,
       instanceId: options.instanceId ?? canvas.getInstanceId(),
       visibleShapeIds,
@@ -285,13 +281,11 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
   function renderOverlays(): void {
     if (isDestroyed) return;
     const cam = canvas.getCamera();
-    const activeDeviceType = canvas.getActiveDeviceType();
     const customOverlays = options.renderCustomOverlays?.({
       doc,
       selectedIds: canvas.getSelectedIds(),
       camera: cam,
       zoom: cam.zoom,
-      activeDeviceType,
       canvas,
     });
     const overlays = computeEditorOverlays({
@@ -540,8 +534,6 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     },
     toSvg: () =>
       exportDocumentToSvg(doc, {
-        activeDeviceType: canvas.getActiveDeviceType(),
-        activeDeviceTypes: canvas.getActiveDeviceTypes(),
         customRenderers: activeCustomRenderers,
         instanceId: options.instanceId ?? canvas.getInstanceId(),
       }),
@@ -550,9 +542,6 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     },
     setShapeStyle: (id: ShapeId, style) => {
       execute([{ type: COMMANDS.setShapeStyle, id, ...style }]);
-    },
-    setShapeOrder: (id: ShapeId, deviceType: DeviceType, order: number | null) => {
-      execute([{ type: COMMANDS.setShapeOrder, id, deviceType, order }]);
     },
     setShapePluginData: (id: ShapeId, pluginId: PluginId, data: unknown | null) => {
       execute([{ type: COMMANDS.setShapePluginData, id, pluginId, data }]);

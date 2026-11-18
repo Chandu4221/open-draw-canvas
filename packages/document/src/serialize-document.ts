@@ -1,7 +1,7 @@
 // Pure document serializer (R-008, R-014, R-041, R-044). Emits version-only
 // schema without timestamps. Sibling z-order is preserved by maintaining map
 // iteration order. ROOT_ID is strictly excluded.
-import { SHAPE_KINDS, STYLE_PROFILES, isRootId } from "@open-draw/contracts";
+import { SHAPE_KINDS, isRootId } from "@open-draw/contracts";
 import type { Document } from "./document";
 import { DocumentError } from "./errors";
 import { isCustomShape } from "./shape";
@@ -134,12 +134,10 @@ export function serializeDocument(doc: Document): string {
       }
     } else {
       switch (shape.kind) {
-        case SHAPE_KINDS.page:
         case SHAPE_KINDS.rect:
         case SHAPE_KINDS.ellipse:
-          break;
-        case SHAPE_KINDS.section:
-          shapeRecord.direction = shape.direction;
+        case SHAPE_KINDS.group:
+        case SHAPE_KINDS.text:
           break;
         case SHAPE_KINDS.line:
           shapeRecord.start = { x: shape.start.x, y: shape.start.y };
@@ -151,15 +149,7 @@ export function serializeDocument(doc: Document): string {
       }
     }
 
-    const meta: Record<string, unknown> = {
-      order: shape.meta.order ?? {},
-    };
-    if (shape.meta.hiddenOn !== undefined && shape.meta.hiddenOn.length > 0) {
-      meta.hiddenOn = shape.meta.hiddenOn;
-    }
-    if (shape.meta.style !== undefined) {
-      meta.style = STYLE_PROFILES[shape.meta.style] ?? shape.meta.style;
-    }
+    const meta: Record<string, unknown> = {};
     if (shape.meta.pluginData !== undefined) {
       if (!isJsonSerializable(shape.meta.pluginData)) {
         throw new DocumentError(
@@ -170,7 +160,7 @@ export function serializeDocument(doc: Document): string {
       meta.pluginData = shape.meta.pluginData;
     }
     for (const [k, v] of Object.entries(shape.meta)) {
-      if (k === "order" || k === "hiddenOn" || k === "style" || k === "pluginData") {
+      if (k === "pluginData") {
         continue;
       }
       if (!isJsonSerializable(v)) {

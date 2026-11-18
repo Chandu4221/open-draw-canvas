@@ -10,25 +10,18 @@ import {
   ROOT_ID,
   SHAPE_KINDS,
   SHAPE_KIND_VALUES,
-  isRootId,
   isValidCustomShapeKind,
   parseShapeId,
 } from "@open-draw/contracts";
 import type { Document } from "./document";
 import { SCHEMA_VERSION, createDocument } from "./document";
 import { DocumentError } from "./errors";
-import {
-  BASE_SHAPE_KEY_SET,
-  SECTION_DIRECTIONS,
-  type CustomShape,
-  type SectionDirection,
-  type Shape,
-} from "./shape";
+import { BASE_SHAPE_KEY_SET, type CustomShape, type Shape } from "./shape";
 import { parseMeta } from "./meta-validation";
 import { validateDocumentDepth } from "./depth-validation";
 
 export { validateDocumentDepth } from "./depth-validation";
-export { parseMeta, parseDeviceType } from "./meta-validation";
+export { parseMeta } from "./meta-validation";
 export { parseShape };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -66,16 +59,6 @@ function parseBoundingBox(value: unknown): BoundingBox {
     );
   }
   return { x: value.x, y: value.y, width: value.width, height: value.height };
-}
-
-function parseSectionDirection(value: unknown): SectionDirection {
-  if (
-    typeof value !== "string" ||
-    (value !== SECTION_DIRECTIONS.row && value !== SECTION_DIRECTIONS.column)
-  ) {
-    throw new DocumentError("invalidShape", `invalid section direction: ${JSON.stringify(value)}`);
-  }
-  return value;
 }
 
 function parseKind(value: unknown): ShapeKind {
@@ -151,8 +134,7 @@ function parseShape(value: unknown): Shape {
   if (value.fillStyle !== undefined) {
     fillStyle = parseFillStyle(value.fillStyle);
   }
-  const isRootShape = isRootId(parentId);
-  const meta = parseMeta(value.meta, isRootShape);
+  const meta = parseMeta(value.meta);
   const base = {
     id,
     kind,
@@ -169,9 +151,6 @@ function parseShape(value: unknown): Shape {
 
   // Validated cast at the boundary: kind membership was checked above and the
   // kind-specific fields are checked right here.
-  if (kind === SHAPE_KINDS.section) {
-    return { ...base, kind, direction: parseSectionDirection(value.direction) } as Shape;
-  }
   if (kind === SHAPE_KINDS.line) {
     const start = parsePoint(value.start, "line start");
     const end = parsePoint(value.end, "line end");

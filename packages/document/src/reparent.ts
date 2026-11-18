@@ -38,7 +38,7 @@ export function isContainerShape(
   ) {
     return false;
   }
-  if (shape.kind === SHAPE_KINDS.page || shape.kind === SHAPE_KINDS.section) {
+  if (shape.kind === SHAPE_KINDS.group) {
     return true;
   }
   if (shape.meta.isContainer === true || shape.meta.container === true) {

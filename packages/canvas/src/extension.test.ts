@@ -9,7 +9,7 @@ import {
 import {
   COMMANDS,
   createDocument,
-  createPage,
+  createRect,
   isCustomShape,
   parseDocument,
   type CustomShape,
@@ -212,7 +212,7 @@ describe("CustomShapeExtension (ADR-0003, R-006, R-008)", () => {
     expect(shape.boundingBox).toEqual({ x: 10, y: 20, width: 80, height: 80 });
     expect(shape.fill).toBe("#ffd700");
     expect(shape.parentId).toBe("canvas:root");
-    expect(shape.meta.order).toEqual({});
+    expect(shape.meta).toEqual({});
   });
 
   it("registers custom shapes via options and editor method, upgrading fallback renderers dynamically", () => {
@@ -493,7 +493,7 @@ describe("CustomShapeExtension (ADR-0003, R-006, R-008)", () => {
           kind: "vendor:strict-widget",
           parentId: "canvas:root",
           boundingBox: { x: 10, y: 10, width: 50, height: 50 },
-          meta: { order: {} },
+          meta: {},
         },
       },
     });
@@ -523,8 +523,8 @@ describe("CustomShapeExtension (ADR-0003, R-006, R-008)", () => {
   });
 
   it("skips document re-hydration and avoids force render when registering an extension with zero instances in document (Issue 3)", () => {
-    const pageId = parseShapeId("page-1");
-    const doc = createDocument([createPage(pageId, { x: 0, y: 0, width: 800, height: 600 })]);
+    const rectId = parseShapeId("rect-1");
+    const doc = createDocument([createRect(rectId, { x: 0, y: 0, width: 800, height: 600 })]);
     const testEditor = createEditor(container as unknown as HTMLElement, { document: doc });
     const docScene = container.querySelector(".od-document-scene") as unknown as MockDomNode;
     expect(docScene).not.toBeNull();
@@ -537,8 +537,8 @@ describe("CustomShapeExtension (ADR-0003, R-006, R-008)", () => {
   });
 
   it("uses fast path for toJson when no custom shape serializers exist (Issue 8)", () => {
-    const pageId = parseShapeId("page-1");
-    const doc = createDocument([createPage(pageId, { x: 0, y: 0, width: 800, height: 600 })]);
+    const rectId = parseShapeId("rect-1");
+    const doc = createDocument([createRect(rectId, { x: 0, y: 0, width: 800, height: 600 })]);
     const testEditor = createEditor(container as unknown as HTMLElement, { document: doc });
     expect(JSON.parse(testEditor.toJson())).toEqual(JSON.parse(JSON.stringify(doc)));
     testEditor.destroy();

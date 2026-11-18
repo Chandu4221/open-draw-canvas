@@ -1,7 +1,7 @@
 // Mutates a shape record in-place for a single command and returns inverse commands.
 // Used by applyTransaction to batch N commands in O(N) without intermediate Document copying (R-018, ADR-0002 D8).
-import type { BoundingBox, DeviceType, PluginId, ShapeId } from "@open-draw/contracts";
-import { isRootId, MAX_COORDINATE_BOUND, parsePluginId, SHAPE_KINDS } from "@open-draw/contracts";
+import type { BoundingBox, PluginId, ShapeId } from "@open-draw/contracts";
+import { MAX_COORDINATE_BOUND, parsePluginId, SHAPE_KINDS } from "@open-draw/contracts";
 import { COMMANDS } from "./commands/registry";
 import type { Command } from "./commands";
 import type { CreateShape } from "./commands/create-shape";
@@ -16,21 +16,6 @@ import { pruneSelectedDescendants } from "./reparent";
 import { isCustomShape, type LineShape, type PenPathShape, type Shape } from "./shape";
 import { subtreeOf } from "./tree";
 import { parseShape } from "./validation";
-
-function areHiddenOnEqual(
-  a: readonly DeviceType[] | undefined | null,
-  b: readonly DeviceType[] | null,
-): boolean {
-  const listA = a === undefined || a === null || a.length === 0 ? null : a;
-  const listB = b === null || b.length === 0 ? null : b;
-  if (listA === listB) return true;
-  if (listA === null || listB === null) return false;
-  if (listA.length !== listB.length) return false;
-  for (let i = 0; i < listA.length; i += 1) {
-    if (listA[i] !== listB[i]) return false;
-  }
-  return true;
-}
 
 export function applyCommandToMap(
   shapes: Record<ShapeId, Shape>,
@@ -270,76 +255,6 @@ export function applyCommandToMap(
           id: command.id,
           boundingBox: previousBox,
           ...(previousSnapshot !== undefined ? { pointsSnapshot: previousSnapshot } : {}),
-        },
-      ];
-    }
-
-    case COMMANDS.setRootStyle: {
-      const shape = shapes[command.id];
-      if (shape === undefined) {
-        throw new DocumentError("shapeNotFound", `no shape with id: ${command.id}`);
-      }
-      if (!isRootId(shape.parentId)) {
-        throw new DocumentError(
-          "invalidShape",
-          "style profile may only be set on root shapes (R-026)",
-        );
-      }
-      const previousStyle = shape.meta.style ?? null;
-      if (previousStyle === command.style) {
-        return [];
-      }
-      const nextMeta = { ...shape.meta };
-      if (command.style === null) {
-        delete nextMeta.style;
-      } else {
-        nextMeta.style = command.style;
-      }
-      shapes[command.id] = { ...shape, meta: nextMeta };
-      return [{ type: COMMANDS.setRootStyle, id: command.id, style: previousStyle }];
-    }
-
-    case COMMANDS.setShapeHiddenOn: {
-      const shape = shapes[command.id];
-      if (shape === undefined) {
-        throw new DocumentError("shapeNotFound", `no shape with id: ${command.id}`);
-      }
-      const previousHiddenOn = shape.meta.hiddenOn ?? null;
-      if (areHiddenOnEqual(previousHiddenOn, command.hiddenOn)) {
-        return [];
-      }
-      const nextMeta = { ...shape.meta };
-      if (command.hiddenOn === null || command.hiddenOn.length === 0) {
-        delete nextMeta.hiddenOn;
-      } else {
-        nextMeta.hiddenOn = command.hiddenOn;
-      }
-      shapes[command.id] = { ...shape, meta: nextMeta };
-      return [{ type: COMMANDS.setShapeHiddenOn, id: command.id, hiddenOn: previousHiddenOn }];
-    }
-
-    case COMMANDS.setShapeOrder: {
-      const shape = shapes[command.id];
-      if (shape === undefined) {
-        throw new DocumentError("shapeNotFound", `no shape with id: ${command.id}`);
-      }
-      const previousOrder = shape.meta.order[command.deviceType] ?? null;
-      if (previousOrder === command.order) {
-        return [];
-      }
-      const nextOrder = { ...shape.meta.order };
-      if (command.order === null) {
-        delete nextOrder[command.deviceType];
-      } else {
-        nextOrder[command.deviceType] = command.order;
-      }
-      shapes[command.id] = { ...shape, meta: { ...shape.meta, order: nextOrder } };
-      return [
-        {
-          type: COMMANDS.setShapeOrder,
-          id: command.id,
-          deviceType: command.deviceType,
-          order: previousOrder,
         },
       ];
     }

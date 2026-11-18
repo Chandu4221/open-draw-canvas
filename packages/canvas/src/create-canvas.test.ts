@@ -1,13 +1,7 @@
 // Canvas controller behavior (R-004, R-015, ADR-0003).
 import { describe, expect, it } from "vitest";
-import {
-  CAPABILITIES,
-  type CapabilityId,
-  DEVICE_TYPES,
-  parseShapeId,
-  SHAPE_KINDS,
-} from "@open-draw/contracts";
-import { createDocument, createPage, createRect } from "@open-draw/document";
+import { CAPABILITIES, type CapabilityId, parseShapeId, SHAPE_KINDS } from "@open-draw/contracts";
+import { createDocument, createGroup, createRect } from "@open-draw/document";
 import { createCanvas } from "./create-canvas";
 import { CONTROLLER_EVENTS } from "./events";
 import { TOOLS } from "./tools";
@@ -126,11 +120,11 @@ describe("createCanvas", () => {
   });
 
   it("supports custom hit testing via registered shape kind", () => {
-    const pageId = parseShapeId("page-1");
+    const groupId = parseShapeId("group-1");
     const rectId = parseShapeId("rect-1");
     const doc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 500, height: 500 }),
-      createRect(rectId, { x: 10, y: 10, width: 100, height: 100 }, { parent: pageId }),
+      createGroup(groupId, { x: 0, y: 0, width: 500, height: 500 }),
+      createRect(rectId, { x: 10, y: 10, width: 100, height: 100 }, { parent: groupId }),
     ]);
 
     // Custom hit tester that rejects points in the upper half
@@ -149,7 +143,7 @@ describe("createCanvas", () => {
     });
 
     // Upper half (y = 20) is missed due to custom hit tester
-    expect(canvas.pickShape(doc, { x: 50, y: 20 })).toBe(pageId);
+    expect(canvas.pickShape(doc, { x: 50, y: 20 })).toBe(groupId);
     // Lower half (y = 70) is hit
     expect(canvas.pickShape(doc, { x: 50, y: 70 })).toBe(rectId);
   });
@@ -160,51 +154,11 @@ describe("createCanvas", () => {
     expect(TOOLS.drawText).toBe("draw-text");
   });
 
-  it("tracks activeDeviceType view state", () => {
-    const canvas = createCanvas();
-    expect(canvas.getActiveDeviceType()).toBeUndefined();
-
-    canvas.setActiveDeviceType(DEVICE_TYPES.mobile);
-    expect(canvas.getActiveDeviceType()).toBe(DEVICE_TYPES.mobile);
-
-    canvas.setActiveDeviceType(undefined);
-    expect(canvas.getActiveDeviceType()).toBeUndefined();
-
-    const canvasWithInit = createCanvas({ activeDeviceType: DEVICE_TYPES.tablet });
-    expect(canvasWithInit.getActiveDeviceType()).toBe(DEVICE_TYPES.tablet);
-  });
-
-  it("tracks scoped activeDeviceTypes per root shape (Issues C1, C2)", () => {
-    const root1 = parseShapeId("root-1");
-    const root2 = parseShapeId("root-2");
-
-    const canvas = createCanvas({
-      activeDeviceType: DEVICE_TYPES.desktop,
-      activeDeviceTypes: { [root1]: DEVICE_TYPES.mobile },
-    });
-
-    // root1 returns scoped value
-    expect(canvas.getActiveDeviceType(root1)).toBe(DEVICE_TYPES.mobile);
-    // root2 falls back to global activeDeviceType
-    expect(canvas.getActiveDeviceType(root2)).toBe(DEVICE_TYPES.desktop);
-    // undefined root falls back to global
-    expect(canvas.getActiveDeviceType()).toBe(DEVICE_TYPES.desktop);
-
-    // Set scoped device type on root2
-    canvas.setActiveDeviceType(DEVICE_TYPES.tablet, root2);
-    expect(canvas.getActiveDeviceType(root2)).toBe(DEVICE_TYPES.tablet);
-    expect(canvas.getActiveDeviceTypes()).toEqual({
-      [root1]: DEVICE_TYPES.mobile,
-      [root2]: DEVICE_TYPES.tablet,
-    });
-
-    // Clear scoped device type on root1
-    canvas.setActiveDeviceType(undefined, root1);
-    expect(canvas.getActiveDeviceType(root1)).toBe(DEVICE_TYPES.desktop);
-  });
-
   it("registers built-in shape kinds by default when options.shapeKinds is omitted (ADR-0008 D4)", () => {
     const canvas = createCanvas();
+    expect(canvas.hasCapability(SHAPE_KINDS.group, CAPABILITIES.container)).toBe(true);
+    expect(canvas.hasCapability(SHAPE_KINDS.group, CAPABILITIES.movable)).toBe(true);
+    expect(canvas.hasCapability(SHAPE_KINDS.group, CAPABILITIES.resizable)).toBe(true);
     expect(canvas.hasCapability(SHAPE_KINDS.rect, CAPABILITIES.movable)).toBe(true);
     expect(canvas.hasCapability(SHAPE_KINDS.rect, CAPABILITIES.resizable)).toBe(true);
     expect(canvas.hasCapability(SHAPE_KINDS.ellipse, CAPABILITIES.movable)).toBe(true);
@@ -215,15 +169,15 @@ describe("createCanvas", () => {
 
   it("hit-tests built-in shapes out of the box without manual registration (ADR-0008 D4)", () => {
     const canvas = createCanvas();
-    const pageId = parseShapeId("page-1");
+    const groupId = parseShapeId("group-1");
     const rectId = parseShapeId("rect-1");
     const doc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 500, height: 500 }),
-      createRect(rectId, { x: 10, y: 10, width: 100, height: 100 }, { parent: pageId }),
+      createGroup(groupId, { x: 0, y: 0, width: 500, height: 500 }),
+      createRect(rectId, { x: 10, y: 10, width: 100, height: 100 }, { parent: groupId }),
     ]);
 
     expect(canvas.pickShape(doc, { x: 50, y: 50 })).toBe(rectId);
-    expect(canvas.pickShape(doc, { x: 200, y: 200 })).toBe(pageId);
+    expect(canvas.pickShape(doc, { x: 200, y: 200 })).toBe(groupId);
     expect(canvas.pickShape(doc, { x: 600, y: 600 })).toBeNull();
   });
 
@@ -269,15 +223,15 @@ describe("createCanvas", () => {
 
   it("resolves selection drill-down through controller (Idea 5, Milestone 09)", () => {
     const canvas = createCanvas();
-    const pageId = parseShapeId("page-1");
+    const groupId = parseShapeId("group-1");
     const rectId = parseShapeId("rect-1");
     const doc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 500, height: 500 }),
-      createRect(rectId, { x: 10, y: 10, width: 100, height: 100 }, { parent: pageId }),
+      createGroup(groupId, { x: 0, y: 0, width: 500, height: 500 }),
+      createRect(rectId, { x: 10, y: 10, width: 100, height: 100 }, { parent: groupId }),
     ]);
 
     // Single click unselected: selects root
-    expect(canvas.resolveSelectionDrillDown(doc, rectId, false)).toBe(pageId);
+    expect(canvas.resolveSelectionDrillDown(doc, rectId, false)).toBe(groupId);
     expect(canvas.resolveSelectionDrillDown(doc, rectId, true)).toBe(rectId);
   });
 
@@ -297,11 +251,11 @@ describe("createCanvas", () => {
 
   it("caches spatial index for same document and re-indexes on new document (ADR-0011)", () => {
     const canvas = createCanvas();
-    const pageId = parseShapeId("page-1");
+    const groupId = parseShapeId("group-1");
     const rectId = parseShapeId("rect-1");
     const doc1 = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 500, height: 500 }),
-      createRect(rectId, { x: 10, y: 10, width: 100, height: 100 }, { parent: pageId }),
+      createGroup(groupId, { x: 0, y: 0, width: 500, height: 500 }),
+      createRect(rectId, { x: 10, y: 10, width: 100, height: 100 }, { parent: groupId }),
     ]);
 
     const index1 = canvas.getSpatialIndex(doc1);
@@ -309,7 +263,7 @@ describe("createCanvas", () => {
     expect(index1).toBe(index2);
     expect(index1.count).toBe(2);
 
-    const doc2 = createDocument([createPage(pageId, { x: 0, y: 0, width: 500, height: 500 })]);
+    const doc2 = createDocument([createGroup(groupId, { x: 0, y: 0, width: 500, height: 500 })]);
     const index3 = canvas.getSpatialIndex(doc2);
     expect(index3).not.toBe(index1);
     expect(index3.count).toBe(1);
@@ -317,19 +271,19 @@ describe("createCanvas", () => {
 
   it("preserves cached spatial index when document changes only non-spatial properties (ADR-0011)", () => {
     const canvas = createCanvas();
-    const pageId = parseShapeId("page-1");
+    const groupId = parseShapeId("group-1");
     const rectId = parseShapeId("rect-1");
     const doc1 = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 500, height: 500 }),
-      createRect(rectId, { x: 10, y: 10, width: 100, height: 100 }, { parent: pageId }),
+      createGroup(groupId, { x: 0, y: 0, width: 500, height: 500 }),
+      createRect(rectId, { x: 10, y: 10, width: 100, height: 100 }, { parent: groupId }),
     ]);
 
     const index1 = canvas.getSpatialIndex(doc1);
 
     const doc2 = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 500, height: 500 }),
+      createGroup(groupId, { x: 0, y: 0, width: 500, height: 500 }),
       {
-        ...createRect(rectId, { x: 10, y: 10, width: 100, height: 100 }, { parent: pageId }),
+        ...createRect(rectId, { x: 10, y: 10, width: 100, height: 100 }, { parent: groupId }),
         label: "Updated Label",
         fill: "#ff0000",
       },
@@ -341,13 +295,13 @@ describe("createCanvas", () => {
 
   it("performs marquee box picking through spatial index via canvas.pickShapesInBox (ADR-0011)", () => {
     const canvas = createCanvas();
-    const pageId = parseShapeId("page-1");
+    const groupId = parseShapeId("group-1");
     const rect1 = parseShapeId("rect-1");
     const rect2 = parseShapeId("rect-2");
     const doc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
-      createRect(rect1, { x: 10, y: 10, width: 50, height: 50 }, { parent: pageId }),
-      createRect(rect2, { x: 100, y: 100, width: 50, height: 50 }, { parent: pageId }),
+      createGroup(groupId, { x: 0, y: 0, width: 800, height: 600 }),
+      createRect(rect1, { x: 10, y: 10, width: 50, height: 50 }, { parent: groupId }),
+      createRect(rect2, { x: 100, y: 100, width: 50, height: 50 }, { parent: groupId }),
     ]);
 
     const picked = canvas.pickShapesInBox(doc, { x: 5, y: 5, width: 40, height: 40 });
@@ -385,11 +339,11 @@ describe("createCanvas", () => {
 
   it("supports explicit invalidateSpatialIndex on CanvasController (ADR-0011)", () => {
     const canvas = createCanvas();
-    const pageId = parseShapeId("page-1");
+    const groupId = parseShapeId("group-1");
     const rectId = parseShapeId("rect-1");
     const doc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 500, height: 500 }),
-      createRect(rectId, { x: 10, y: 10, width: 100, height: 100 }, { parent: pageId }),
+      createGroup(groupId, { x: 0, y: 0, width: 500, height: 500 }),
+      createRect(rectId, { x: 10, y: 10, width: 100, height: 100 }, { parent: groupId }),
     ]);
 
     const index1 = canvas.getSpatialIndex(doc);

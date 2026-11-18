@@ -4,35 +4,19 @@
 import type {
   BoundingBox,
   CustomShapeKind,
-  DeviceType,
   FillStyle,
   PluginId,
   Point,
   ShapeId,
   ShapeKind,
-  StyleId,
 } from "@open-draw/contracts";
 import { ROOT_ID, SHAPE_KINDS, SHAPE_KIND_VALUES, isRootId } from "@open-draw/contracts";
 import { DocumentError } from "./errors";
 import { parseColor, parseFillStyle, parseStrokeWidth } from "./style-validation";
 
-// Section flow direction: stored and validated now, consumed by the derive
-// pipeline later (ADR-0002 D7).
-export const SECTION_DIRECTIONS = {
-  row: "row",
-  column: "column",
-} as const;
-
-export type SectionDirection = keyof typeof SECTION_DIRECTIONS;
-
-// meta absent hiddenOn = visible everywhere (R-028); absent order entry = 0.
 // `pluginData`: opaque forward-compatibility namespace (R-044, ADR-0003 D4).
-// `style`: settable on root pages only, inherited by tree position (R-026).
 export interface ShapeMeta {
-  readonly order: Partial<Record<DeviceType, number>>;
-  readonly hiddenOn?: readonly DeviceType[];
   readonly pluginData?: Readonly<Record<PluginId, unknown>>;
-  readonly style?: StyleId;
   readonly [key: string]: unknown;
 }
 
@@ -66,15 +50,6 @@ export const BASE_SHAPE_KEYS = {
 
 export const BASE_SHAPE_KEY_SET: ReadonlySet<string> = new Set(Object.values(BASE_SHAPE_KEYS));
 
-export interface PageShape extends BaseShape {
-  readonly kind: (typeof SHAPE_KINDS)["page"];
-}
-
-export interface SectionShape extends BaseShape {
-  readonly kind: (typeof SHAPE_KINDS)["section"];
-  readonly direction: SectionDirection;
-}
-
 export interface RectShape extends BaseShape {
   readonly kind: (typeof SHAPE_KINDS)["rect"];
 }
@@ -98,13 +73,17 @@ export interface TextShape extends BaseShape {
   readonly kind: (typeof SHAPE_KINDS)["text"];
 }
 
+export interface GroupShape extends BaseShape {
+  readonly kind: (typeof SHAPE_KINDS)["group"];
+}
+
 export interface CustomShape extends BaseShape {
   readonly kind: CustomShapeKind;
   readonly customData?: Readonly<Record<string, unknown>>;
 }
 
 export type BuiltinShape =
-  PageShape | SectionShape | RectShape | EllipseShape | LineShape | PenPathShape | TextShape;
+  RectShape | EllipseShape | LineShape | PenPathShape | TextShape | GroupShape;
 
 export type Shape = BuiltinShape | CustomShape;
 
@@ -124,7 +103,7 @@ export interface ShapeInit {
   readonly meta?: ShapeMeta;
 }
 
-const DEFAULT_META: ShapeMeta = { order: {} };
+const DEFAULT_META: ShapeMeta = {};
 
 function baseInit(
   id: ShapeId,
@@ -179,23 +158,14 @@ function baseInit(
   };
 }
 
-export function createPage(id: ShapeId, boundingBox: BoundingBox, init: ShapeInit = {}): PageShape {
-  return Object.freeze({
-    ...baseInit(id, SHAPE_KINDS.page, boundingBox, init),
-    kind: SHAPE_KINDS.page,
-  });
-}
-
-export function createSection(
+export function createGroup(
   id: ShapeId,
   boundingBox: BoundingBox,
-  direction: SectionDirection,
   init: ShapeInit = {},
-): SectionShape {
+): GroupShape {
   return Object.freeze({
-    ...baseInit(id, SHAPE_KINDS.section, boundingBox, init),
-    kind: SHAPE_KINDS.section,
-    direction,
+    ...baseInit(id, SHAPE_KINDS.group, boundingBox, init),
+    kind: SHAPE_KINDS.group,
   });
 }
 

@@ -657,7 +657,7 @@ describe("createEditor", () => {
     expect(editor.getDocument().shapes[rect.id]?.content).toBeUndefined();
   });
 
-  it("provides style and responsive layer ordering APIs (P1-1)", () => {
+  it("provides shape style APIs (P1-1)", () => {
     const rect = createRect(parseShapeId("rect-style"), { x: 0, y: 0, width: 100, height: 40 });
     editor = createEditor(container as unknown as HTMLElement, {
       document: createDocument([rect]),
@@ -674,14 +674,6 @@ describe("createEditor", () => {
     expect(styled.stroke).toBe("#000000");
     expect(styled.strokeWidth).toBe(2);
     expect(styled.fillStyle).toBe(FILL_STYLES.none);
-
-    (
-      editor as unknown as {
-        setShapeOrder: (id: string, deviceType: string, order: number | null) => void;
-      }
-    ).setShapeOrder(rect.id, "mobile", 3);
-    const ordered = editor.getDocument().shapes[rect.id]!;
-    expect(ordered.meta.order["mobile"]).toBe(3);
   });
 
   it("emits machineChanged when interaction state changes (P1-2)", () => {

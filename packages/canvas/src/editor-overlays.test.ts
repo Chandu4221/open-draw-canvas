@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createDocument } from "@open-draw/document";
+import { createDocument, createRect } from "@open-draw/document";
 import { RENDER_STYLES } from "@open-draw/renderer-svg";
 import { parseShapeId } from "@open-draw/contracts";
-import { createPage, createRect } from "@open-draw/document";
 import { GESTURE_KINDS } from "./gestures";
 import { TOOLS } from "./tools";
 import { computeEditorOverlays } from "./editor-overlays";
@@ -40,13 +39,11 @@ describe("computeEditorOverlays", () => {
   });
 
   it("renders multi-selection item outlines using RENDER_STYLES without hardcoded css variables", () => {
-    const pageId = parseShapeId("page-1");
     const r1 = parseShapeId("rect-1");
     const r2 = parseShapeId("rect-2");
     const doc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 800, height: 600 }),
-      createRect(r1, { x: 10, y: 10, width: 50, height: 50 }, { parent: pageId }),
-      createRect(r2, { x: 100, y: 100, width: 50, height: 50 }, { parent: pageId }),
+      createRect(r1, { x: 10, y: 10, width: 50, height: 50 }),
+      createRect(r2, { x: 100, y: 100, width: 50, height: 50 }),
     ]);
 
     const overlays = computeEditorOverlays({

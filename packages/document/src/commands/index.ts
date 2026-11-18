@@ -4,11 +4,8 @@ import type { CreateShape } from "./create-shape";
 import type { DeleteShape } from "./delete-shape";
 import type { MoveShapes } from "./move-shapes";
 import type { ReparentShape } from "./reparent-shape";
-import type { SetRootStyle } from "./set-root-style";
 import type { SetShapeBoundingBox } from "./set-shape-bounding-box";
-import type { SetShapeHiddenOn } from "./set-shape-hidden-on";
 import type { SetShapeLabel } from "./set-shape-label";
-import type { SetShapeOrder } from "./set-shape-order";
 import type { SetShapeStyle } from "./set-shape-style";
 import type { SetShapeContent } from "./set-shape-content";
 import type { DuplicateShapes } from "./duplicate-shapes";
@@ -29,12 +26,6 @@ export type { MoveShapes } from "./move-shapes";
 export { applyMoveShapes } from "./move-shapes";
 export type { SetShapeBoundingBox } from "./set-shape-bounding-box";
 export { applySetShapeBoundingBox } from "./set-shape-bounding-box";
-export type { SetRootStyle } from "./set-root-style";
-export { applySetRootStyle } from "./set-root-style";
-export type { SetShapeHiddenOn } from "./set-shape-hidden-on";
-export { applySetShapeHiddenOn } from "./set-shape-hidden-on";
-export type { SetShapeOrder } from "./set-shape-order";
-export { applySetShapeOrder } from "./set-shape-order";
 export type { SetShapeStyle } from "./set-shape-style";
 export { applySetShapeStyle, applySetShapeStyleToMap } from "./set-shape-style";
 export type { SetShapeContent } from "./set-shape-content";
@@ -53,9 +44,6 @@ export type Command =
   | ReparentShape
   | MoveShapes
   | SetShapeBoundingBox
-  | SetRootStyle
-  | SetShapeHiddenOn
-  | SetShapeOrder
   | SetShapeStyle
   | SetShapeContent
   | DuplicateShapes

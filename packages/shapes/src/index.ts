@@ -1,4 +1,4 @@
-// @open-draw/shapes — built-in shape kind modules (rect, ellipse, line, pen-path, text).
+// @open-draw/shapes — built-in shape kind modules (rect, ellipse, line, pen-path, text, group).
 // Implements ADR-0003 D1, D5, D6, ADR-0006. Depends ONLY on @open-draw/contracts (R-002, R-020).
 import { type CapabilityId, SHAPE_KINDS } from "@open-draw/contracts";
 import { RECT_CAPABILITIES } from "./rect";
@@ -6,12 +6,14 @@ import { ELLIPSE_CAPABILITIES } from "./ellipse";
 import { LINE_CAPABILITIES } from "./line";
 import { PEN_PATH_CAPABILITIES } from "./pen-path";
 import { TEXT_CAPABILITIES } from "./text";
+import { GROUP_CAPABILITIES } from "./group";
 
 export * as rectShape from "./rect";
 export * as ellipseShape from "./ellipse";
 export * as lineShape from "./line";
 export * as penPathShape from "./pen-path";
 export * as textShape from "./text";
+export * as groupShape from "./group";
 
 export { RECT_KIND, RECT_CAPABILITIES, hitTestRect } from "./rect";
 export { ELLIPSE_KIND, ELLIPSE_CAPABILITIES, hitTestEllipse } from "./ellipse";
@@ -31,6 +33,7 @@ export {
   hitTestPenPath,
 } from "./pen-path";
 export { TEXT_KIND, TEXT_CAPABILITIES, hitTestText } from "./text";
+export { GROUP_KIND, GROUP_CAPABILITIES, hitTestGroup } from "./group";
 
 export interface ShapeDefinition {
   readonly kind: string;
@@ -44,4 +47,5 @@ export const BUILTIN_SHAPE_CAPABILITIES: Readonly<Record<string, readonly Capabi
     [SHAPE_KINDS.line]: LINE_CAPABILITIES,
     [SHAPE_KINDS.penPath]: PEN_PATH_CAPABILITIES,
     [SHAPE_KINDS.text]: TEXT_CAPABILITIES,
+    [SHAPE_KINDS.group]: GROUP_CAPABILITIES,
   });

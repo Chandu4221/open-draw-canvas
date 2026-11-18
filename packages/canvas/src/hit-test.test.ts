@@ -2,7 +2,7 @@
 // document, never cached).
 import { describe, expect, it } from "vitest";
 import { parseShapeId } from "@open-draw/contracts";
-import { createDocument, createPage, createRect, type Shape } from "@open-draw/document";
+import { createDocument, createGroup, createRect, type Shape } from "@open-draw/document";
 import { DEFAULT_CAMERA } from "./camera";
 import { HANDLES } from "./handles";
 import {
@@ -15,15 +15,15 @@ import {
 } from "./hit-test";
 import { buildSpatialIndexFromDocument } from "./spatial/spatial-index";
 
-const pageId = parseShapeId("page-1");
+const groupId = parseShapeId("group-1");
 const firstId = parseShapeId("rect-first");
 const secondId = parseShapeId("rect-second");
 const grandchildId = parseShapeId("rect-grandchild");
 
 const document = createDocument([
-  createPage(pageId, { x: 0, y: 0, width: 640, height: 480 }),
-  createRect(firstId, { x: 10, y: 10, width: 50, height: 50 }, { parent: pageId }),
-  createRect(secondId, { x: 30, y: 30, width: 50, height: 50 }, { parent: pageId }),
+  createGroup(groupId, { x: 0, y: 0, width: 640, height: 480 }),
+  createRect(firstId, { x: 10, y: 10, width: 50, height: 50 }, { parent: groupId }),
+  createRect(secondId, { x: 30, y: 30, width: 50, height: 50 }, { parent: groupId }),
   createRect(grandchildId, { x: 25, y: 25, width: 20, height: 20 }, { parent: firstId }),
 ]);
 
@@ -97,12 +97,12 @@ describe("boxIntersectsBox (F3, ADR-0006 Option A)", () => {
 
 describe("pickShapesInBox (F3, ADR-0006 Option A)", () => {
   it("picks shapes whose bounding boxes intersect the marquee box", () => {
-    // Marquee intersects both rects inside page-1, but is enclosed by page-1
+    // Marquee intersects both rects inside group-1, but is enclosed by group-1
     const marquee = { x: 5, y: 5, width: 40, height: 40 };
     const picked = pickShapesInBox(document, marquee);
     expect(picked).toContain(firstId);
     expect(picked).toContain(secondId);
-    expect(picked).not.toContain(pageId); // Enclosing page is not selected
+    expect(picked).not.toContain(groupId); // Enclosing group is not selected
   });
 
   it("returns empty array when marquee intersects no shapes", () => {
@@ -114,22 +114,22 @@ describe("pickShapesInBox (F3, ADR-0006 Option A)", () => {
 
 describe("resolveSelectionDrillDown (Idea 5, Milestone 09)", () => {
   it("selects top-level root container on single-click when nothing is selected", () => {
-    // Clicking on grandchild or child selects page-1 (root container)
-    expect(resolveSelectionDrillDown(document, grandchildId, null, false)).toBe(pageId);
-    expect(resolveSelectionDrillDown(document, firstId, null, false)).toBe(pageId);
+    // Clicking on grandchild or child selects group-1 (root container)
+    expect(resolveSelectionDrillDown(document, grandchildId, null, false)).toBe(groupId);
+    expect(resolveSelectionDrillDown(document, firstId, null, false)).toBe(groupId);
   });
 
   it("selects root shape directly on single-click", () => {
-    expect(resolveSelectionDrillDown(document, pageId, null, false)).toBe(pageId);
+    expect(resolveSelectionDrillDown(document, groupId, null, false)).toBe(groupId);
   });
 
   it("retains root container on single-click when root is already selected", () => {
-    expect(resolveSelectionDrillDown(document, grandchildId, pageId, false)).toBe(pageId);
+    expect(resolveSelectionDrillDown(document, grandchildId, groupId, false)).toBe(groupId);
   });
 
   it("drills into direct child on double-click from unselected or root-selected state", () => {
     expect(resolveSelectionDrillDown(document, grandchildId, null, true)).toBe(firstId);
-    expect(resolveSelectionDrillDown(document, grandchildId, pageId, true)).toBe(firstId);
+    expect(resolveSelectionDrillDown(document, grandchildId, groupId, true)).toBe(firstId);
   });
 
   it("drills into grandchild on second double-click when child is selected", () => {
@@ -149,11 +149,11 @@ describe("resolveSelectionDrillDown (Idea 5, Milestone 09)", () => {
     const btnB = parseShapeId("btn-b");
 
     const multiBranchDoc = createDocument([
-      createPage(pageId, { x: 0, y: 0, width: 1000, height: 1000 }),
-      createRect(secA, { x: 10, y: 10, width: 400, height: 400 }, { parent: pageId }),
+      createGroup(groupId, { x: 0, y: 0, width: 1000, height: 1000 }),
+      createRect(secA, { x: 10, y: 10, width: 400, height: 400 }, { parent: groupId }),
       createRect(cardA, { x: 20, y: 20, width: 200, height: 200 }, { parent: secA }),
       createRect(btnA, { x: 30, y: 30, width: 100, height: 50 }, { parent: cardA }),
-      createRect(secB, { x: 500, y: 10, width: 400, height: 400 }, { parent: pageId }),
+      createRect(secB, { x: 500, y: 10, width: 400, height: 400 }, { parent: groupId }),
       createRect(cardB, { x: 520, y: 20, width: 200, height: 200 }, { parent: secB }),
       createRect(btnB, { x: 530, y: 30, width: 100, height: 50 }, { parent: cardB }),
     ]);
@@ -164,8 +164,8 @@ describe("resolveSelectionDrillDown (Idea 5, Milestone 09)", () => {
 
 describe("Differential Fuzz: Spatial Index vs Brute Force Equivalence (ADR-0011)", () => {
   it("yields 100% equivalent results across 100+ randomized shapes for pickShape and pickShapesInBox", () => {
-    const parentPage = parseShapeId("fuzz-page");
-    const shapes: Shape[] = [createPage(parentPage, { x: 0, y: 0, width: 4000, height: 4000 })];
+    const parentGroup = parseShapeId("fuzz-group");
+    const shapes: Shape[] = [createGroup(parentGroup, { x: 0, y: 0, width: 4000, height: 4000 })];
 
     // Seed 120 deterministic shapes with varying positions and overlaps
     for (let i = 1; i <= 120; i += 1) {
@@ -174,7 +174,11 @@ describe("Differential Fuzz: Spatial Index vs Brute Force Equivalence (ADR-0011)
       const width = ((i * 37) % 150) + 30;
       const height = ((i * 53) % 150) + 30;
       shapes.push(
-        createRect(parseShapeId(`fuzz-rect-${i}`), { x, y, width, height }, { parent: parentPage }),
+        createRect(
+          parseShapeId(`fuzz-rect-${i}`),
+          { x, y, width, height },
+          { parent: parentGroup },
+        ),
       );
     }
 

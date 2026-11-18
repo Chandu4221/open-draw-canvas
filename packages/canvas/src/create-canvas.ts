@@ -1,7 +1,7 @@
 // Canvas controller entry point (R-004, R-008, R-036, ADR-0003 D1).
 // Encapsulates machine transition, camera transform, selection state,
 // shape-kind capabilities, and action dispatch.
-import type { BoundingBox, CapabilityId, DeviceType, Point, ShapeId } from "@open-draw/contracts";
+import type { BoundingBox, CapabilityId, Point, ShapeId } from "@open-draw/contracts";
 import { type Document, shapeListInOrder } from "@open-draw/document";
 import type { ActionId, KeyboardEventDescriptor } from "@open-draw/input";
 import { resolveKeyBinding } from "@open-draw/input";
@@ -47,8 +47,6 @@ export interface CanvasOptions {
   readonly camera?: Camera;
   readonly selection?: Selection;
   readonly shapeKinds?: ShapeKindRegistry | readonly ShapeKindRegistration[];
-  readonly activeDeviceType?: DeviceType;
-  readonly activeDeviceTypes?: Readonly<Record<ShapeId, DeviceType | undefined>>;
 }
 
 export interface CanvasController {
@@ -89,10 +87,6 @@ export interface CanvasController {
   emit(event: ControllerEvent): void;
   batch(fn: () => void): void;
   clearListeners(): void;
-
-  getActiveDeviceType(rootId?: ShapeId): DeviceType | undefined;
-  setActiveDeviceType(deviceType?: DeviceType, rootId?: ShapeId): void;
-  getActiveDeviceTypes(): Readonly<Record<ShapeId, DeviceType | undefined>>;
 }
 
 let defaultInstanceSeq = 0;
@@ -104,12 +98,6 @@ export function createCanvas(options: CanvasOptions = {}): CanvasController {
       : `canvas-${++defaultInstanceSeq}`;
   let camera = clampCamera(options.camera ?? DEFAULT_CAMERA);
   let selection = options.selection ?? EMPTY_SELECTION;
-  let activeDeviceType = options.activeDeviceType;
-  const scopedDeviceTypes = new Map<ShapeId, DeviceType | undefined>(
-    options.activeDeviceTypes !== undefined
-      ? (Object.entries(options.activeDeviceTypes) as [ShapeId, DeviceType | undefined][])
-      : [],
-  );
   let machine = INITIAL_MACHINE_STATE;
   let shapeKindRegistry: ShapeKindRegistry =
     options.shapeKinds === undefined
@@ -356,25 +344,5 @@ export function createCanvas(options: CanvasOptions = {}): CanvasController {
         set.clear();
       }
     },
-
-    getActiveDeviceType: (rootId) => {
-      if (rootId !== undefined && scopedDeviceTypes.has(rootId)) {
-        return scopedDeviceTypes.get(rootId);
-      }
-      return activeDeviceType;
-    },
-    setActiveDeviceType: (deviceType, rootId) => {
-      if (rootId !== undefined) {
-        if (deviceType === undefined) {
-          scopedDeviceTypes.delete(rootId);
-        } else {
-          scopedDeviceTypes.set(rootId, deviceType);
-        }
-      } else {
-        activeDeviceType = deviceType;
-      }
-    },
-    getActiveDeviceTypes: () =>
-      Object.fromEntries(scopedDeviceTypes.entries()) as Record<ShapeId, DeviceType | undefined>,
   };
 }
